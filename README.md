@@ -15,7 +15,6 @@ Click to Play --> https://erichlof.github.io/PathTracedPong/Path_Traced_Pong.htm
 
 * Swipe to control paddle
 * Pinch to dolly camera in or out
-* small up button above directional controls to enter shot mode.  Power will oscillate
 * Tap the 'Gravity' button to simulate gravity!
 * Tap the 'Difficulty' button to cycle through the 3 difficulty levels
 
