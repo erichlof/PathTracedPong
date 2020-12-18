@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<title>Path Traced Pong (a fully path traced game)</title>
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, user-scalable=no, initial-scale=1">
+		<link href="css/default.css" rel="stylesheet"/>
+	</head>
+	
+	<body>
+		
+		<div id="container"> </div>
+		<div id="info">Path Traced Pong (a fully path traced game)</div>
+		
+		<button id="difficultyButton" class="toggleButton" onclick="toggleDifficulty()"></button>
+		<button id="gravityButton" class="toggleButton" onclick="toggleGravity()"></button>
+		<div id="playerScore" style="position:fixed; left:2%; bottom:1%; font-size:x-large; font-family:arial; color:rgb(26,179,255);"></div>
+		<div id="computerScore" style="position:fixed; right:2%; bottom:1%; font-size:x-large; font-family:arial; color:rgb(179,26,255);"></div>
+		<div id="cameraInfo" style="position:fixed; left:2%; bottom:5%; font-size:x-large; font-family:arial; color:rgb(255,255,255);"></div>
+		<div id="infoBanner" style="position:fixed; text-align:center; left:20%; right:20%; top:20%; font-size:xx-large; font-family:arial; color:rgb(255,255,255);"></div>
+
+		<script src="js/three.min.js"> </script>
+		<script src="js/threex.keyboardstate.js"> </script>
+		<script src="js/FirstPersonCameraControls.js"> </script>
+		<script src="js/MobileJoystickControls_NoButtons.js"> </script>
+		<script src="js/stats.min.js"> </script>
+		<script src="js/pathTracingCommon.js"> </script>
+		<script src="js/commonFunctions.js"> </script>
+
+		<script src="js/Path_Traced_Pong.js"> </script>
+
+	</body>
+</html>
