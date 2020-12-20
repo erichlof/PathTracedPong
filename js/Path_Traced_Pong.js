@@ -143,14 +143,14 @@ function toggleDifficulty()
         }
         else if (difficulty == 1)
         {
-                maxComputerSpeed = gravityOn ? 6.5 : 6;
+                maxComputerSpeed = gravityOn ? 6 : 5.5;
                 initialBallSpeed = 150;
                 ballSpeed = initialBallSpeed;
                 document.getElementById("difficultyButton").innerHTML = "Difficulty: ADVANCED";
         }
         else
         {
-                maxComputerSpeed = gravityOn ? 9 : 8.5;
+                maxComputerSpeed = gravityOn ? 7.5 : 7;
                 initialBallSpeed = 200;
                 ballSpeed = initialBallSpeed;
                 document.getElementById("difficultyButton").innerHTML = "Difficulty: PONG LORD";
@@ -169,9 +169,9 @@ function toggleGravity()
                 if (difficulty == 0)
                         maxComputerSpeed = 4;       
                 else if (difficulty == 1)
-                        maxComputerSpeed = 6.5;      
+                        maxComputerSpeed = 6;      
                 else
-                        maxComputerSpeed = 9; 
+                        maxComputerSpeed = 7.5; 
         }
         else
         {
@@ -179,9 +179,9 @@ function toggleGravity()
                 if (difficulty == 0)
                         maxComputerSpeed = 3.5;
                 else if (difficulty == 1)
-                        maxComputerSpeed = 6;
+                        maxComputerSpeed = 5.5;
                 else
-                        maxComputerSpeed = 8.5;
+                        maxComputerSpeed = 7;
         }
         
 } // end function toggleGravity()
