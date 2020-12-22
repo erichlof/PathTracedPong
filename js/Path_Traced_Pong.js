@@ -41,6 +41,20 @@ let difficulty = -1;
 let saved_Z_Position = paddle_Z + 80;
 let cutSceneIsPlaying = false;
 
+// WebAudio variables
+let audioLoader;
+let listener;
+let highPingSound1;
+let highPingSound2;
+let lowPingSound1;
+let lowPingSound2;
+let ballMissedSound;
+let winnerSound;
+let losingSound;
+let ballObj = new THREE.Object3D();
+let playerObj = new THREE.Object3D();
+let computerObj = new THREE.Object3D();
+
 
 let playerScoreElement = document.getElementById('playerScore');
 playerScoreElement.style.cursor = "default";
@@ -62,6 +76,60 @@ function initSceneData()
         EPS_intersect = mouseControl ? 0.01 : 1.0; // less precision on mobile
 
         useGenericInput = false;
+
+        audioLoader = new THREE.AudioLoader();
+        listener = new THREE.AudioListener();
+        worldCamera.add(listener);
+
+        audioLoader.load('sounds/highPing.mp3', function (buffer)
+        { 
+                highPingSound1 = new THREE.PositionalAudio(listener);
+                highPingSound1.setBuffer(buffer);
+                highPingSound1.setVolume(2);
+                ballObj.add(highPingSound1);
+                highPingSound2 = new THREE.PositionalAudio(listener);
+                highPingSound2.setBuffer(buffer);
+                highPingSound2.setVolume(2);
+                ballObj.add(highPingSound2); 
+        });
+
+        audioLoader.load('sounds/lowPing.mp3', function (buffer)
+        {
+                lowPingSound1 = new THREE.PositionalAudio(listener);
+                lowPingSound1.setBuffer(buffer);
+                lowPingSound1.setVolume(3);
+                playerObj.add(lowPingSound1);
+                lowPingSound2 = new THREE.PositionalAudio(listener);
+                lowPingSound2.setBuffer(buffer);
+                lowPingSound2.setVolume(3);
+                computerObj.add(lowPingSound2);
+        });
+
+        audioLoader.load('sounds/ballMiss.mp3', function (buffer)
+        {
+                ballMissedSound = new THREE.PositionalAudio(listener);
+                ballMissedSound.setBuffer(buffer);
+                ballMissedSound.setVolume(0.2);
+                worldCamera.add(ballMissedSound);
+        });
+
+        audioLoader.load('sounds/winner.mp3', function (buffer)
+        {
+                winnerSound = new THREE.PositionalAudio(listener);
+                winnerSound.setBuffer(buffer);
+                winnerSound.setVolume(0.05);
+                worldCamera.add(winnerSound);
+        });
+
+        audioLoader.load('sounds/synthHit.mp3', function (buffer)
+        {
+                losingSound = new THREE.PositionalAudio(listener);
+                losingSound.setBuffer(buffer);
+                losingSound.setVolume(0.04);
+                worldCamera.add(losingSound);
+        });
+
+
 
         // set camera's field of view
         worldCamera.fov = 50; // 50
@@ -234,6 +302,7 @@ function startNewVolley()
 	if (playerScore >= numberOfPointsToWinGame)
 	{
                 playerWins = true;
+                winnerSound.play();
                 infoBannerElement.style.color = "rgb(26,179,255)";
                 infoBannerElement.innerHTML = "Player WINS!"
                 pathTracingUniforms.uCutSceneIsPlaying.value = true;
@@ -241,6 +310,7 @@ function startNewVolley()
 	if (computerScore >= numberOfPointsToWinGame)
 	{
                 computerWins = true;
+                losingSound.play();
                 infoBannerElement.style.color = "rgb(179,26,255)";
                 infoBannerElement.innerHTML = "Computer WINS!"
                 pathTracingUniforms.uCutSceneIsPlaying.value = true;
@@ -334,6 +404,8 @@ function updateGameState()
                 if ( ballPos.x - ballRad < playerPos.x + paddleRadX && ballPos.x + ballRad > playerPos.x - paddleRadX &&
                      ballPos.y - ballRad < playerPos.y + paddleRadY && ballPos.y + ballRad > playerPos.y - paddleRadY )
                 {
+                        if (!lowPingSound1.isPlaying)
+                                lowPingSound1.play();
                         ballPos.z = playerPos.z - ballRad;
 			ballDir.z *= -1;
 			
@@ -366,7 +438,11 @@ function updateGameState()
                         ballSpeed *= 1.015; // slightly increase ball speed
                 }
                 else
+                {
+                        ballMissedSound.play();
                         playerMissed = true;
+                }
+                        
         }
 
         // check A.I.-ball collision
@@ -375,12 +451,18 @@ function updateGameState()
                 if (ballPos.x - ballRad < computerPos.x + paddleRadX && ballPos.x + ballRad > computerPos.x - paddleRadX &&
                         ballPos.y - ballRad < computerPos.y + paddleRadY && ballPos.y + ballRad > computerPos.y - paddleRadY)
                 {
+                        if (!lowPingSound2.isPlaying)
+                                lowPingSound2.play();
                         ballPos.z = computerPos.z + ballRad;
                         ballDir.z *= -1;
                         ballSpeed *= 1.015; // slightly increase ball speed
                 }
                 else
+                {
+                        ballMissedSound.play();
                         computerMissed = true;
+                }
+                        
         }
 
         // check ball-room walls collision
@@ -388,25 +470,45 @@ function updateGameState()
         {
                 ballPos.x = halfRoomDimensions.x - ballRad;
                 ballDir.x *= -1;
-                //ballDir.normalize();
+                if (!playerMissed && !computerMissed)
+                {
+                        if (!highPingSound1.isPlaying)
+                                highPingSound1.play();
+                        else highPingSound2.play();
+                }
         }
         if (ballPos.x - ballRad < -halfRoomDimensions.x)
         {
                 ballPos.x = -halfRoomDimensions.x + ballRad;
                 ballDir.x *= -1;
-                //ballDir.normalize();
+                if (!playerMissed && !computerMissed)
+                {
+                        if (!highPingSound1.isPlaying)
+                                highPingSound1.play();
+                        else highPingSound2.play();
+                }
         }
         if (ballPos.y + ballRad > halfRoomDimensions.y)
         {
                 ballPos.y = halfRoomDimensions.y - ballRad;
                 ballDir.y *= -1;
-                //ballDir.normalize();
+                if (!playerMissed && !computerMissed)
+                {
+                        if (!highPingSound1.isPlaying)
+                                highPingSound1.play();
+                        else highPingSound2.play();
+                }
         }
         if (ballPos.y - ballRad < -halfRoomDimensions.y)
         {
                 ballPos.y = -halfRoomDimensions.y + ballRad;
                 ballDir.y *= -1;
-                //ballDir.normalize();
+                if (!playerMissed && !computerMissed)
+                {
+                        if (!highPingSound1.isPlaying)
+                                highPingSound1.play();
+                        else highPingSound2.play();
+                }
         }
         if (ballPos.z > halfRoomDimensions.z)
         {
@@ -420,6 +522,7 @@ function updateGameState()
                 if (missTimer >= 3)
                         newVolleyFlag = true;
         }
+
 } // end function updateGameState()
 
 
@@ -518,7 +621,12 @@ function updateVariablesAndUniforms()
 
 		// A.I.
 		pathTracingUniforms.uComputerPos.value.copy(computerPos);
-	}
+        }
+        
+        // update Positional Sound sources
+        ballObj.position.copy(ballPos);
+        playerObj.position.copy(playerPos);
+        computerObj.position.copy(computerPos);
         
         // DEBUG INFO
         //cameraInfoElement.innerHTML = "maxComputerSpeed: " + maxComputerSpeed.toFixed(1);
