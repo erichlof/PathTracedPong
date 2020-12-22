@@ -20,8 +20,8 @@ Click to Play --> https://erichlof.github.io/PathTracedPong/Path_Traced_Pong.htm
 
 <h2>TODO</h2>
 
-* Add Pong sound effects!
 * Possibly add a small moving obstacle (mirror sphere or box) that randomly slides on the floor, changing the ball direction if it gets hit. ;-)<br>
+* Network gameplay for 2 players using WebSockets would be a great addition (if I can ever find the time!) ;)
 
 <h2>ABOUT</h2>
 
