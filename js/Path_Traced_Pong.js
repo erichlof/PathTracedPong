@@ -72,6 +72,8 @@ infoBannerElement.style.MozUserSelect = "none";
 // called automatically from within initTHREEjs() function
 function initSceneData()
 {
+        //pixelRatio = 1; // for computers with the latest GPUs!
+
         // scene/demo-specific three.js objects setup goes here
         EPS_intersect = mouseControl ? 0.01 : 1.0; // less precision on mobile
 
@@ -152,6 +154,9 @@ function initPathTracingShaders()
         pathTracingUniforms.uPaddleRadX = { type: "f", value: paddleRadX };
         pathTracingUniforms.uPaddleRadY = { type: "f", value: paddleRadY };
         pathTracingUniforms.uCutSceneIsPlaying = { type: "b", value: cutSceneIsPlaying };
+        pathTracingUniforms.uColorEdgeSharpeningRate = { type: "f", value: 1.0 };
+        pathTracingUniforms.uNormalEdgeSharpeningRate = { type: "f", value: 1.0 };
+        pathTracingUniforms.uObjectEdgeSharpeningRate = { type: "f", value: 1.0 };
         
 
         pathTracingDefines = {
