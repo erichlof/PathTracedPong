@@ -50,43 +50,46 @@ Quad quads[N_QUADS];
 
 
 
-//--------------------------------------------------------------------------
-float SceneIntersect( Ray r, inout Intersection intersec )
-//--------------------------------------------------------------------------
+//---------------------------------------------------------------------------------------
+float SceneIntersect( Ray r, inout Intersection intersec, out float intersectedObjectID )
+//---------------------------------------------------------------------------------------
 {
 	vec3 n;
 	float d = INFINITY;
 	float t = INFINITY;
 	bool isRayExiting = false;
+	int countID = 0;
 	
-        for (int i = 0; i < N_SPHERES; i++)
-        {
-		d = SphereIntersect( spheres[i].radius, spheres[i].position, r );
-		if (d < t)
-		{
-			t = d;
-			intersec.normal = normalize((r.origin + r.direction * t) - spheres[i].position);
-			intersec.emission = spheres[i].emission;
-			intersec.color = spheres[i].color;
-			intersec.type = spheres[i].type;
-		}
+        
+	d = SphereIntersect( spheres[0].radius, spheres[0].position, r );
+	if (d < t)
+	{
+		t = d;
+		intersec.normal = normalize((r.origin + r.direction * t) - spheres[0].position);
+		intersec.emission = spheres[0].emission;
+		intersec.color = spheres[0].color;
+		intersec.type = spheres[0].type;
+		intersectedObjectID = float(countID);
 	}
 
-	for (int i = 0; i < N_QUADS; i++)
-        {
-		d = QuadIntersect( quads[i].v0, quads[i].v1, quads[i].v2, quads[i].v3, r, false);
-		if (d < t)
-		{
-			t = d;
-			intersec.normal = normalize(quads[i].normal);
-			intersec.emission = quads[i].emission;
-			intersec.color = quads[i].color;
-			intersec.type = quads[i].type;
-		}
+	countID++;
+
+	d = QuadIntersect( quads[0].v0, quads[0].v1, quads[0].v2, quads[0].v3, r, false);
+	if (d < t)
+	{
+		t = d;
+		intersec.normal = normalize(quads[0].normal);
+		intersec.emission = quads[0].emission;
+		intersec.color = quads[0].color;
+		intersec.type = quads[0].type;
+		intersectedObjectID = float(countID);
 	}
+	
+	countID++;
 
 	for (int i = 0; i < N_PLANES; i++)
         {
+		countID += i;
 		d = SingleSidedPlaneIntersect( planes[i].pla, r );
 		if (d < t)
 		{
@@ -95,11 +98,16 @@ float SceneIntersect( Ray r, inout Intersection intersec )
 			intersec.emission = planes[i].emission;
 			intersec.color = planes[i].color;
 			intersec.type = planes[i].type;
+			intersectedObjectID = float(countID);
 		}
         }
 
+	countID++;
+
 	for (int i = 0; i < N_BOXES; i++)
         {
+		countID += i;
+
 		d = BoxIntersect( boxes[i].minCorner, boxes[i].maxCorner, r, n, isRayExiting );
 		if (d < t)
 		{
@@ -109,6 +117,7 @@ float SceneIntersect( Ray r, inout Intersection intersec )
 			intersec.color = boxes[i].color;
 			intersec.type = boxes[i].type;
 			//finalIsRayExiting = isRayExiting;
+			intersectedObjectID = float(countID);
 		}
         }
 	
@@ -117,9 +126,9 @@ float SceneIntersect( Ray r, inout Intersection intersec )
 }
 
 
-//-----------------------------------------------------------------------
-vec3 CalculateRadiance(Ray r, out bool surfaceIsDynamic)
-//-----------------------------------------------------------------------
+//--------------------------------------------------------------------------------------------------------------------------------------------------
+vec3 CalculateRadiance( Ray r, out vec3 objectNormal, out vec3 objectColor, out float objectID, out float pixelSharpness, out float dynamicSurface )
+//--------------------------------------------------------------------------------------------------------------------------------------------------
 {
 	Intersection intersec;
 
@@ -133,34 +142,57 @@ vec3 CalculateRadiance(Ray r, out bool surfaceIsDynamic)
 	float nc, nt, ratioIoR, Re, Tr;
 	float P, RP, TP;
 	float weight;
+	float intersectedObjectID;
 
 	int diffuseCount = 0;
+	int previousIntersecType = -100;
 
 	bool bounceIsSpecular = true;
 	bool sampleLight = false;
 	bool lastHitWasSpec = false;
-	surfaceIsDynamic = true;
+
+	dynamicSurface = 0.0;
 
 	
 	for (int bounces = 0; bounces < 6; bounces++)
 	{
 
-		t = SceneIntersect(r, intersec);
+		t = SceneIntersect(r, intersec, intersectedObjectID);
 		
 		
 		if (t == INFINITY)
 			break;
+
+		// useful data 
+		n = normalize(intersec.normal);
+                nl = dot(n, r.direction) < 0.0 ? normalize(n) : normalize(-n);
+		x = r.origin + r.direction * t;
+
+		if (bounces == 0)
+		{
+			objectNormal = nl;
+			objectColor = intersec.color;
+			objectID = intersectedObjectID;
+		}
 		
 		
 		if (intersec.type == LIGHT)
 		{	
+			if (diffuseCount == 0)
+			{
+				objectNormal = nl;
+
+				pixelSharpness = 1.0;
+
+				if (intersec.emission == vec3(10))
+					dynamicSurface = 1.0;
+			}
+
 			if (sampleLight)
 				accumCol = mask * intersec.emission;
 			else if (bounceIsSpecular)
 			{
 				accumCol = mask * clamp(intersec.emission, 0.0, 1.0);
-				if (intersec.emission == vec3(10.0))
-					surfaceIsDynamic = true;
 			}
 				
 			// reached a light, so we can exit
@@ -169,14 +201,9 @@ vec3 CalculateRadiance(Ray r, out bool surfaceIsDynamic)
 
 
 		//if we get here and sampleLight is still true, shadow ray failed to find a light source
-		if (sampleLight) 
-			break;
+		// if (sampleLight) 
+		// 	break;
 		
-
-		// useful data 
-		n = normalize(intersec.normal);
-                nl = dot(n, r.direction) < 0.0 ? n : normalize(-n);
-		x = r.origin + r.direction * t;
 
 		// make player's background mirror reflection a solid plastic surface 
 		if (lastHitWasSpec && intersec.type == REFR)
@@ -185,7 +212,7 @@ vec3 CalculateRadiance(Ray r, out bool surfaceIsDynamic)
 		 
                 if (intersec.type == DIFF) // Ideal DIFFUSE reflection
 		{
-			surfaceIsDynamic = false;
+			previousIntersecType = DIFF;
 
 			diffuseCount++;
 
@@ -193,7 +220,7 @@ vec3 CalculateRadiance(Ray r, out bool surfaceIsDynamic)
 
 			bounceIsSpecular = false;
 
-			if (diffuseCount == 1 && rand() < 0.5)
+			if (diffuseCount == 1 && rng() < 0.5)
 			{
 				r = Ray( x, randomCosWeightedDirectionInHemisphere(nl) );
 				r.origin += nl * uEPS_intersect;
@@ -204,6 +231,10 @@ vec3 CalculateRadiance(Ray r, out bool surfaceIsDynamic)
 				dirToLight = sampleSphereLight(x, nl, spheres[0], weight);
 			else
 				dirToLight = sampleQuadLight(x, nl, quads[0], weight);	
+			// if (distance(x, uBallPos) < rng() * 100.0 && rng() < dot(nl, normalize(uBallPos - x)))
+			// 	dirToLight = sampleSphereLight(x, nl, spheres[0], weight);
+			// else
+			// 	dirToLight = sampleQuadLight(x, nl, quads[0], weight);
 				
 			mask *= weight;
 
@@ -218,6 +249,8 @@ vec3 CalculateRadiance(Ray r, out bool surfaceIsDynamic)
 		
 		if (intersec.type == SPEC)  // Ideal SPECULAR reflection
 		{
+			previousIntersecType = SPEC;
+
 			lastHitWasSpec = true;
 
 			mask *= intersec.color;
@@ -232,6 +265,8 @@ vec3 CalculateRadiance(Ray r, out bool surfaceIsDynamic)
 
 		if (intersec.type == REFR)  // Ideal dielectric REFRACTION
 		{
+			previousIntersecType = REFR;
+
 			nc = 1.0; // IOR of Air
 			nt = 1.5; // IOR of common Glass
 			Re = calcFresnelReflectance(r.direction, n, nc, nt, ratioIoR);
@@ -240,7 +275,7 @@ vec3 CalculateRadiance(Ray r, out bool surfaceIsDynamic)
                 	RP = Re / P;
                 	TP = Tr / (1.0 - P);
 			
-			if (rand() < P)
+			if (rng() < P)
 			{
 				mask *= RP;
 				r = Ray( x, reflect(r.direction, nl) ); // reflect ray from surface
@@ -267,6 +302,8 @@ vec3 CalculateRadiance(Ray r, out bool surfaceIsDynamic)
 		
 		if (intersec.type == COAT)  // Diffuse object underneath with ClearCoat on top
 		{
+			previousIntersecType = COAT;
+
 			nc = 1.0; // IOR of Air
 			nt = 1.4; // IOR of Clear Coat
 			Re = calcFresnelReflectance(r.direction, n, nc, nt, ratioIoR);
@@ -275,9 +312,12 @@ vec3 CalculateRadiance(Ray r, out bool surfaceIsDynamic)
                 	RP = Re / P;
                 	TP = Tr / (1.0 - P);
 
-			surfaceIsDynamic = (bounces == 0 && intersec.color == vec3(0.7, 0.1, 1.0));
+			if (intersec.color == vec3(0.7, 0.1, 1.0) && (bounces == 0 || previousIntersecType == REFR))
+			{
+				dynamicSurface = 1.0;
+			}
 
-			if (rand() < P)
+			if (rng() < P)
 			{
 				mask *= RP;
 				r = Ray( x, reflect(r.direction, nl) ); // reflect ray from surface
@@ -292,7 +332,7 @@ vec3 CalculateRadiance(Ray r, out bool surfaceIsDynamic)
 			
 			bounceIsSpecular = false;
 			
-			// if (diffuseCount == 1 && rand() < 0.5)
+			// if (diffuseCount == 1 && rng() < 0.5)
 			// {
 			// 	// choose random Diffuse sample vector
 			// 	r = Ray( x, randomCosWeightedDirectionInHemisphere(nl) );
@@ -300,7 +340,7 @@ vec3 CalculateRadiance(Ray r, out bool surfaceIsDynamic)
 			// 	continue;
 			// }
 
-			if (distance(x, uBallPos) < rand() * 100.0 && rand() < dot(nl, normalize(uBallPos - x)))
+			if (distance(x, uBallPos) < rng() * 100.0 && rng() < dot(nl, normalize(uBallPos - x)))
 				dirToLight = sampleSphereLight(x, nl, spheres[0], weight);
 			else
 				dirToLight = sampleQuadLight(x, nl, quads[0], weight);
@@ -330,30 +370,31 @@ void SetupScene(void)
 //-----------------------------------------------------------------------
 {
 	vec3 z  = vec3(0);// No color value, Black        
-	vec3 L1 = vec3(1.0, 0.7, 0.4) * 12.0;// Bright light
-	float lightY = uHalfRoomDimensions.y - 3.0;
+	vec3 L1 = vec3(1.0, 0.7, 0.4) * 30.0;// Bright light
+	float lX = 10.0;
+	float lY = uHalfRoomDimensions.y - 3.0;
+	float lZ = 10.0;
 
-	spheres[0] = Sphere( 5.0, uBallPos, vec3(10.0), z, LIGHT);// Game Ball
+	spheres[0] = Sphere( 5.0, uBallPos, vec3(10), z, LIGHT);// Game Ball
 
-	planes[0] = Plane( vec4( 0,0,1, -uHalfRoomDimensions.z), z, vec3(0.1), SPEC);// Back Wall Plane
-	planes[1] = Plane( vec4( 0,-1,0, -uHalfRoomDimensions.y), z, vec3(0.2), DIFF);// Ceiling Plane
-	planes[2] = Plane( vec4( 0,1,0, -uHalfRoomDimensions.y), z, vec3(1.0), COAT);// Floor Plane
-	planes[3] = Plane( vec4( 1,0,0, -uHalfRoomDimensions.x), z, vec3(1.0, 0.0 ,0.0), COAT);// Red Left Wall Plane
-	planes[4] = Plane( vec4(-1,0,0, -uHalfRoomDimensions.x), z, vec3(0.0, 0.7, 0.0), COAT);// Green Right Wall Plane
-	//planes[5] = Plane( vec4( 0,0,-1, -uHalfRoomDimensions.z), z, vec3(0.1), SPEC);// Front Wall Plane (behind camera)
+	planes[0] = Plane( vec4( 0,0,1, -uHalfRoomDimensions.z), z, vec3(0.1), SPEC);// Back Wall mirror
+	planes[1] = Plane( vec4( 0,-1,0, -uHalfRoomDimensions.y), z, vec3(0.1), DIFF);// Ceiling (0.1)
+	planes[2] = Plane( vec4( 0,1,0, -uHalfRoomDimensions.y), z, vec3(0.9), COAT);// Floor (0.9)
+	planes[3] = Plane( vec4( 1,0,0, -uHalfRoomDimensions.x), z, vec3(1.0, 0.0 ,0.0), COAT);// Red Left Wall (1.0, 0.0 ,0.0)
+	planes[4] = Plane( vec4(-1,0,0, -uHalfRoomDimensions.x), z, vec3(0.0, 0.7, 0.0), COAT);// Green Right Wall (0.0, 0.7, 0.0)
+	//planes[5] = Plane( vec4( 0,0,-1, -uHalfRoomDimensions.z), z, vec3(0.1), SPEC);// Front Wall (behind camera)
 
 	boxes[0] = Box( vec3(-uHalfRoomDimensions.x + 1.0, uBallPos.y - 5.0, uBallPos.z - 10.0), vec3(-uHalfRoomDimensions.x + 2.0, uBallPos.y + 5.0, uBallPos.z + 10.0), z, vec3(1.0, 0.765557, 0.336057), SPEC);// Gold Metal Box left
 	boxes[1] = Box( vec3( uHalfRoomDimensions.x - 2.0, uBallPos.y - 5.0, uBallPos.z - 10.0), vec3( uHalfRoomDimensions.x - 1.0, uBallPos.y + 5.0, uBallPos.z + 10.0), z, vec3(1.0), SPEC);// Aluminum Metal Box right
 	boxes[2] = Box( vec3(uBallPos.x - 5.0, uHalfRoomDimensions.y - 2.0, uBallPos.z - 10.0), vec3(uBallPos.x + 5.0, uHalfRoomDimensions.y - 1.0, uBallPos.z + 10.0), z, vec3(0.955008, 0.637427, 0.538163), SPEC);// Copper Metal Box ceiling
 	boxes[3] = Box( vec3(uBallPos.x - 5.0, -uHalfRoomDimensions.y + 1.0, uBallPos.z - 10.0), vec3(uBallPos.x + 5.0, -uHalfRoomDimensions.y + 2.0, uBallPos.z + 10.0), z, vec3(0.955008, 0.637427, 0.538163), SPEC);// Copper Metal Box floor
-	boxes[4] = Box( vec3(uPlayerPos.x-uPaddleRadX, uPlayerPos.y-uPaddleRadY, uPlayerPos.z), vec3(uPlayerPos.x+uPaddleRadX, uPlayerPos.y+uPaddleRadY, uPlayerPos.z+3.0), z, vec3(0.1, 0.7, 1.0), uCutSceneIsPlaying ? COAT : REFR);// Player paddle
-	boxes[5] = Box( vec3(uComputerPos.x-uPaddleRadX, uComputerPos.y-uPaddleRadY, uComputerPos.z), vec3(uComputerPos.x+uPaddleRadX, uComputerPos.y+uPaddleRadY, uComputerPos.z+3.0), z, vec3(0.7, 0.1, 1.0), COAT);// Computer A.I. paddle
+	boxes[4] = Box( vec3(uPlayerPos.x-uPaddleRadX, uPlayerPos.y-uPaddleRadY, uPlayerPos.z), vec3(uPlayerPos.x+uPaddleRadX, uPlayerPos.y+uPaddleRadY, uPlayerPos.z+3.0), z, vec3(0.1, 0.7, 1.0), uCutSceneIsPlaying ? COAT : REFR);// Player paddle (0.1,0.7,1.0)
+	boxes[5] = Box( vec3(uComputerPos.x-uPaddleRadX, uComputerPos.y-uPaddleRadY, uComputerPos.z), vec3(uComputerPos.x+uPaddleRadX, uComputerPos.y+uPaddleRadY, uComputerPos.z+3.0), z, vec3(0.7, 0.1, 1.0), COAT);// Computer A.I. paddle (0.7, 0.1, 1.0)
 
-	quads[0] = Quad( vec3(0,-1, 0), vec3(-10,lightY,-10), vec3(10,lightY,-10), vec3(10,lightY,10), vec3(-10,lightY,10), L1, z, LIGHT);// rectangular Area Light in ceiling
+	quads[0] = Quad( vec3(0,-1, 0), vec3(-lX,lY,-lZ), vec3(lX,lY,-lZ), vec3(lX,lY,lZ), vec3(-lX,lY,lZ), L1, z, LIGHT);// rectangular Area Light in ceiling
 }
 
 
-//#include <pathtracing_main>
 
 // tentFilter from Peter Shirley's 'Realistic Ray Tracing (2nd Edition)' book, pg. 60		
 float tentFilter(float x)
@@ -364,64 +405,102 @@ float tentFilter(float x)
 
 void main( void )
 {
-	// not needed, three.js has a built-in uniform named cameraPosition
-	//vec3 camPos   = vec3( uCameraMatrix[3][0],  uCameraMatrix[3][1],  uCameraMatrix[3][2]);
-	
 	vec3 camRight   = vec3( uCameraMatrix[0][0],  uCameraMatrix[0][1],  uCameraMatrix[0][2]);
 	vec3 camUp      = vec3( uCameraMatrix[1][0],  uCameraMatrix[1][1],  uCameraMatrix[1][2]);
 	vec3 camForward = vec3(-uCameraMatrix[2][0], -uCameraMatrix[2][1], -uCameraMatrix[2][2]);
+	// the following is not needed - three.js has a built-in uniform named cameraPosition
+	//vec3 camPos   = vec3( uCameraMatrix[3][0],  uCameraMatrix[3][1],  uCameraMatrix[3][2]);
 	
 	// calculate unique seed for rng() function
-	seed = uvec2(uFrameCounter, uFrameCounter + 1.0) * uvec2(gl_FragCoord); // old way of generating random numbers
+	seed = uvec2(uFrameCounter, uFrameCounter + 1.0) * uvec2(gl_FragCoord);
 
-	randVec4 = texture(tBlueNoiseTexture, (gl_FragCoord.xy + (uRandomVec2 * 255.0)) / 255.0); // new way of rand()
+	/* // initialize rand() variables
+	counter = -1.0; // will get incremented by 1 on each call to rand()
+	channel = 0; // the final selected color channel to use for rand() calc (range: 0 to 3, corresponds to R,G,B, or A)
+	randNumber = 0.0; // the final randomly-generated number (range: 0.0 to 1.0)
+	randVec4 = vec4(0); // samples and holds the RGBA blueNoise texture value for this pixel
+	randVec4 = texelFetch(tBlueNoiseTexture, ivec2(mod(gl_FragCoord.xy + floor(uRandomVec2 * 256.0), 256.0)), 0); */
 	
 	//vec2 pixelOffset = vec2( tentFilter(rng()), tentFilter(rng()) ) * 0.5;
-	// even though it is ultimately set to 0.0, the following is needed to avoid artifacts on mobile. :-/ ?
-	vec2 pixelOffset = vec2(tentFilter(uRandomVec2.x)) * 0.0;
-
+	vec2 pixelOffset = vec2(0);
+	
 	// we must map pixelPos into the range -1.0 to +1.0
-	vec2 pixelPos = (gl_FragCoord.xy + pixelOffset) / uResolution.xy * 2.0 - 1.0;
-
+	vec2 pixelPos = ((gl_FragCoord.xy + pixelOffset) / uResolution) * 2.0 - 1.0;
+	
 	vec3 rayDir = normalize( pixelPos.x * camRight * uULen + pixelPos.y * camUp * uVLen + camForward );
-	/* 
-	// depth of field (not used in this game)
+	
+	/* // depth of field
 	vec3 focalPoint = uFocusDistance * rayDir;
-	float randomAngle = rand() * TWO_PI; // pick random point on aperture
-	float randomRadius = rand() * uApertureSize;
+	float randomAngle = rng() * TWO_PI; // pick random point on aperture
+	float randomRadius = rng() * uApertureSize;
 	vec3  randomAperturePos = ( cos(randomAngle) * camRight + sin(randomAngle) * camUp ) * sqrt(randomRadius);
 	// point on aperture to focal point
-	vec3 finalRayDir = normalize(focalPoint - randomAperturePos);
-	Ray ray = Ray( cameraPosition + randomAperturePos, finalRayDir ); 
-	*/
-
-	Ray ray = Ray(cameraPosition, rayDir);
-
-	SetupScene(); 
+	vec3 finalRayDir = normalize(focalPoint - randomAperturePos); */
 	
-	bool surfaceIsDynamic = true;
+	Ray ray = Ray( cameraPosition, rayDir );
+
+	SetupScene();
+	
+	// Edge Detection - don't want to blur edges where either surface normals change abruptly (i.e. room wall corners), objects overlap each other (i.e. edge of a foreground sphere in front of another sphere right behind it),
+	// or an abrupt color variation on the same smooth surface, even if it has similar surface normals (i.e. checkerboard pattern). Want to keep all of these cases as sharp as possible - no blur filter will be applied.
+	vec3 objectNormal, objectColor;
+	float objectID = -INFINITY;
+	float pixelSharpness = 0.0;
+	float dynamicSurface = 0.0;
+	
 	// perform path tracing and get resulting pixel color
-	vec3 pixelColor = CalculateRadiance(ray, surfaceIsDynamic);
-	
-	vec4 previousPixelData = texelFetch(tPreviousTexture, ivec2(gl_FragCoord), 0);
-	vec3 previousColor = previousPixelData.rgb;
+	vec4 currentPixel = vec4( vec3(CalculateRadiance(ray, objectNormal, objectColor, objectID, pixelSharpness, dynamicSurface)), 0.0 );
 
+	// if difference between normals of neighboring pixels is less than the first edge0 threshold, the white edge line effect is considered off (0.0)
+	float edge0 = 0.2; // edge0 is the minimum difference required between normals of neighboring pixels to start becoming a white edge line
+	// any difference between normals of neighboring pixels that is between edge0 and edge1 smoothly ramps up the white edge line brightness (smoothstep 0.0-1.0)
+	float edge1 = 0.6; // once the difference between normals of neighboring pixels is >= this edge1 threshold, the white edge line is considered fully bright (1.0)
+	float difference_Nx = fwidth(objectNormal.x);
+	float difference_Ny = fwidth(objectNormal.y);
+	float difference_Nz = fwidth(objectNormal.z);
+	float normalDifference = smoothstep(edge0, edge1, difference_Nx) + smoothstep(edge0, edge1, difference_Ny) + smoothstep(edge0, edge1, difference_Nz);
+
+	edge0 = 0.0;
+	edge1 = 0.5;
+	float difference_obj = abs(dFdx(objectID)) > 0.0 ? 1.0 : 0.0;
+	difference_obj += abs(dFdy(objectID)) > 0.0 ? 1.0 : 0.0;
+	float objectDifference = smoothstep(edge0, edge1, difference_obj);
+
+	float difference_col = length(dFdx(objectColor)) > 0.0 ? 1.0 : 0.0;
+	difference_col += length(dFdy(objectColor)) > 0.0 ? 1.0 : 0.0;
+	float colorDifference = smoothstep(edge0, edge1, difference_col);
+	// edge detector (normal and object differences) white-line debug visualization
+	//currentPixel.rgb += 1.0 * vec3(max(normalDifference, objectDifference));
 	
-	if (previousPixelData.a < 1.0 || surfaceIsDynamic)
+	vec4 previousPixel = texelFetch(tPreviousTexture, ivec2(gl_FragCoord.xy), 0);
+
+	if (dynamicSurface > 0.0 || previousPixel.a == 0.99)
 	{
-                previousColor *= 0.0; // motion-blur trail amount (old image)
-                //pixelColor *= 1.0; // brightness of new image (noisy)
-        }
-	else if (uCameraIsMoving)
+		previousPixel = vec4(0); // motion-blur trail amount (old image)
+	}
+	else if (uCameraIsMoving) // camera is currently moving
 	{
-                previousColor *= 0.6; // motion-blur trail amount (old image)
-                pixelColor *= 0.4; // brightness of new image (noisy)
-        }
-	else
+		previousPixel.rgb *= 0.6; // motion-blur trail amount (old image)
+		currentPixel.rgb *= 0.4; // brightness of new image (noisy)
+		
+		previousPixel.a = 0.0;
+	}
+	else 
 	{
-                previousColor *= 0.9; // motion-blur trail amount (old image)
-                pixelColor *= 0.1; // brightness of new image (noisy)
-        }
+		previousPixel.rgb *= 0.9; // motion-blur trail amount (old image)
+		currentPixel.rgb *= 0.1; // brightness of new image (noisy)
+	}
+
+	currentPixel.a = pixelSharpness;
+
+	currentPixel.a = colorDifference  >= 1.0 ? min(uSampleCounter * uColorEdgeSharpeningRate , 1.01) : currentPixel.a;
+	currentPixel.a = normalDifference >= 1.0 ? min(uSampleCounter * uNormalEdgeSharpeningRate, 1.01) : currentPixel.a;
+	currentPixel.a = objectDifference >= 1.0 ? min(uSampleCounter * uObjectEdgeSharpeningRate, 1.01) : currentPixel.a;
 	
-        pc_fragColor = vec4( pixelColor + previousColor, surfaceIsDynamic ? 0.99 : 1.0 );	
+	// Eventually, all edge-containing pixels' .a (alpha channel) values will converge to 1.01, which keeps them from getting blurred by the box-blur filter, thus retaining sharpness.
+	if (pixelSharpness == 1.0 || previousPixel.a > 1.0)
+		currentPixel.a = 1.01;
+	
+	
+	pc_fragColor = vec4(previousPixel.rgb + currentPixel.rgb, dynamicSurface > 0.0 ? 0.99 : currentPixel.a);
 }
