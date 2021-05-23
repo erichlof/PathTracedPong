@@ -57,10 +57,10 @@ float SceneIntersect( Ray r, inout Intersection intersec, out float intersectedO
 	vec3 n;
 	float d = INFINITY;
 	float t = INFINITY;
+	int objectCount = 0;
 	bool isRayExiting = false;
-	int countID = 0;
 	
-        
+	
 	d = SphereIntersect( spheres[0].radius, spheres[0].position, r );
 	if (d < t)
 	{
@@ -69,10 +69,9 @@ float SceneIntersect( Ray r, inout Intersection intersec, out float intersectedO
 		intersec.emission = spheres[0].emission;
 		intersec.color = spheres[0].color;
 		intersec.type = spheres[0].type;
-		intersectedObjectID = float(countID);
+		intersectedObjectID = float(objectCount);
 	}
-
-	countID++;
+	objectCount++;
 
 	d = QuadIntersect( quads[0].v0, quads[0].v1, quads[0].v2, quads[0].v3, r, false);
 	if (d < t)
@@ -82,14 +81,12 @@ float SceneIntersect( Ray r, inout Intersection intersec, out float intersectedO
 		intersec.emission = quads[0].emission;
 		intersec.color = quads[0].color;
 		intersec.type = quads[0].type;
-		intersectedObjectID = float(countID);
+		intersectedObjectID = float(objectCount);
 	}
-	
-	countID++;
+	objectCount++;
 
 	for (int i = 0; i < N_PLANES; i++)
         {
-		countID += i;
 		d = SingleSidedPlaneIntersect( planes[i].pla, r );
 		if (d < t)
 		{
@@ -98,16 +95,14 @@ float SceneIntersect( Ray r, inout Intersection intersec, out float intersectedO
 			intersec.emission = planes[i].emission;
 			intersec.color = planes[i].color;
 			intersec.type = planes[i].type;
-			intersectedObjectID = float(countID);
+			intersectedObjectID = float(objectCount);
 		}
+		objectCount++;
         }
 
-	countID++;
 
 	for (int i = 0; i < N_BOXES; i++)
         {
-		countID += i;
-
 		d = BoxIntersect( boxes[i].minCorner, boxes[i].maxCorner, r, n, isRayExiting );
 		if (d < t)
 		{
@@ -117,8 +112,9 @@ float SceneIntersect( Ray r, inout Intersection intersec, out float intersectedO
 			intersec.color = boxes[i].color;
 			intersec.type = boxes[i].type;
 			//finalIsRayExiting = isRayExiting;
-			intersectedObjectID = float(countID);
+			intersectedObjectID = float(objectCount);
 		}
+		objectCount++;
         }
 	
 
@@ -146,7 +142,9 @@ vec3 CalculateRadiance( Ray r, out vec3 objectNormal, out vec3 objectColor, out 
 
 	int diffuseCount = 0;
 	int previousIntersecType = -100;
+	intersec.type = -100;
 
+	bool coatTypeIntersected = false;
 	bool bounceIsSpecular = true;
 	bool sampleLight = false;
 	bool lastHitWasSpec = false;
@@ -156,6 +154,7 @@ vec3 CalculateRadiance( Ray r, out vec3 objectNormal, out vec3 objectColor, out 
 	
 	for (int bounces = 0; bounces < 6; bounces++)
 	{
+		previousIntersecType = intersec.type;
 
 		t = SceneIntersect(r, intersec, intersectedObjectID);
 		
@@ -180,9 +179,7 @@ vec3 CalculateRadiance( Ray r, out vec3 objectNormal, out vec3 objectColor, out 
 		{	
 			if (diffuseCount == 0)
 			{
-				objectNormal = nl;
-
-				pixelSharpness = 1.0;
+				pixelSharpness = 1.01;
 
 				if (intersec.emission == vec3(10))
 					dynamicSurface = 1.0;
@@ -212,8 +209,6 @@ vec3 CalculateRadiance( Ray r, out vec3 objectNormal, out vec3 objectColor, out 
 		 
                 if (intersec.type == DIFF) // Ideal DIFFUSE reflection
 		{
-			previousIntersecType = DIFF;
-
 			diffuseCount++;
 
 			mask *= intersec.color;
@@ -249,8 +244,6 @@ vec3 CalculateRadiance( Ray r, out vec3 objectNormal, out vec3 objectColor, out 
 		
 		if (intersec.type == SPEC)  // Ideal SPECULAR reflection
 		{
-			previousIntersecType = SPEC;
-
 			lastHitWasSpec = true;
 
 			mask *= intersec.color;
@@ -265,7 +258,8 @@ vec3 CalculateRadiance( Ray r, out vec3 objectNormal, out vec3 objectColor, out 
 
 		if (intersec.type == REFR)  // Ideal dielectric REFRACTION
 		{
-			previousIntersecType = REFR;
+			if (diffuseCount == 0)
+				pixelSharpness = -1.0;
 
 			nc = 1.0; // IOR of Air
 			nt = 1.5; // IOR of common Glass
@@ -302,7 +296,7 @@ vec3 CalculateRadiance( Ray r, out vec3 objectNormal, out vec3 objectColor, out 
 		
 		if (intersec.type == COAT)  // Diffuse object underneath with ClearCoat on top
 		{
-			previousIntersecType = COAT;
+			coatTypeIntersected = true;
 
 			nc = 1.0; // IOR of Air
 			nt = 1.4; // IOR of Clear Coat
@@ -319,6 +313,9 @@ vec3 CalculateRadiance( Ray r, out vec3 objectNormal, out vec3 objectColor, out 
 
 			if (rand() < P)
 			{
+				if (diffuseCount == 0)
+					pixelSharpness = -1.0;
+
 				mask *= RP;
 				r = Ray( x, reflect(r.direction, nl) ); // reflect ray from surface
 				r.origin += nl * uEPS_intersect;
@@ -422,7 +419,7 @@ void main( void )
 	randVec4 = texelFetch(tBlueNoiseTexture, ivec2(mod(gl_FragCoord.xy + floor(uRandomVec2 * 256.0), 256.0)), 0);
 	
 	//vec2 pixelOffset = vec2( tentFilter(rng()), tentFilter(rng()) ) * 0.5;
-	vec2 pixelOffset = vec2(0);
+	vec2 pixelOffset = vec2(0); // achieves 60 FPS even on a smartphone, compared with 50 FPS for above line 
 	
 	// we must map pixelPos into the range -1.0 to +1.0
 	vec2 pixelPos = ((gl_FragCoord.xy + pixelOffset) / uResolution) * 2.0 - 1.0;
@@ -491,16 +488,26 @@ void main( void )
 		currentPixel.rgb *= 0.1; // brightness of new image (noisy)
 	}
 
-	currentPixel.a = pixelSharpness;
+	currentPixel.a = 0.0;
+	if (colorDifference >= 1.0 || normalDifference >= 1.0 || objectDifference >= 1.0)
+		pixelSharpness = 1.01;
 
-	currentPixel.a = colorDifference  >= 1.0 ? min(uSampleCounter * uColorEdgeSharpeningRate , 1.01) : currentPixel.a;
-	currentPixel.a = normalDifference >= 1.0 ? min(uSampleCounter * uNormalEdgeSharpeningRate, 1.01) : currentPixel.a;
-	currentPixel.a = objectDifference >= 1.0 ? min(uSampleCounter * uObjectEdgeSharpeningRate, 1.01) : currentPixel.a;
 	
 	// Eventually, all edge-containing pixels' .a (alpha channel) values will converge to 1.01, which keeps them from getting blurred by the box-blur filter, thus retaining sharpness.
-	if (pixelSharpness == 1.0 || previousPixel.a > 1.0)
+	if (previousPixel.a == 1.01)
 		currentPixel.a = 1.01;
+	// for dynamic scenes
+	if (previousPixel.a == 1.01 && rng() < 0.1)
+		currentPixel.a = 1.0;
+
+	if (previousPixel.a == -1.0)
+		currentPixel.a = 0.0;
+
+	if (pixelSharpness == 1.01)
+		currentPixel.a = 1.01;
+	if (pixelSharpness == -1.0)
+		currentPixel.a = -1.0;
 	
-	
+
 	pc_fragColor = vec4(previousPixel.rgb + currentPixel.rgb, dynamicSurface > 0.0 ? 0.99 : currentPixel.a);
 }
