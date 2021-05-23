@@ -154,9 +154,6 @@ function initPathTracingShaders()
         pathTracingUniforms.uPaddleRadX = { type: "f", value: paddleRadX };
         pathTracingUniforms.uPaddleRadY = { type: "f", value: paddleRadY };
         pathTracingUniforms.uCutSceneIsPlaying = { type: "b", value: cutSceneIsPlaying };
-        pathTracingUniforms.uColorEdgeSharpeningRate = { type: "f", value: 1.0 };
-        pathTracingUniforms.uNormalEdgeSharpeningRate = { type: "f", value: 1.0 };
-        pathTracingUniforms.uObjectEdgeSharpeningRate = { type: "f", value: 1.0 };
         
 
         pathTracingDefines = {
