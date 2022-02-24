@@ -264,6 +264,7 @@ vec3 CalculateRadiance( out vec3 objectNormal, out vec3 objectColor, out float o
 
 		if (hitType == REFR)  // Ideal dielectric REFRACTION
 		{
+			// use the following simplified check if scene is dynamic
 			if (diffuseCount == 0)
 				pixelSharpness = -1.0;
 
@@ -319,9 +320,6 @@ vec3 CalculateRadiance( out vec3 objectNormal, out vec3 objectColor, out float o
 
 			if (rand() < P)
 			{
-				if (diffuseCount == 0)
-					pixelSharpness = -1.0;
-
 				mask *= RP;
 				rayDirection = reflect(rayDirection, nl); // reflect ray from surface
 				rayOrigin = x + nl * uEPS_intersect;
@@ -495,6 +493,14 @@ void main( void )
 		currentPixel.rgb *= 0.1; // brightness of new image (noisy)
 	}
 
+	// if current raytraced pixel didn't return any color value, just use the previous frame's pixel color
+	if (currentPixel.rgb == vec3(0.0))
+	{
+		currentPixel.rgb = previousPixel.rgb;
+		previousPixel.rgb *= 0.5;
+		currentPixel.rgb *= 0.5;
+	}
+
 	currentPixel.a = 0.0;
 	if (colorDifference >= 1.0 || normalDifference >= 1.0 || objectDifference >= 1.0)
 		pixelSharpness = 1.01;
@@ -506,7 +512,6 @@ void main( void )
 	// for dynamic scenes
 	if (previousPixel.a == 1.01 && rng() < 0.1)
 		currentPixel.a = 1.0;
-
 	if (previousPixel.a == -1.0)
 		currentPixel.a = 0.0;
 
