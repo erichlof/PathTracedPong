@@ -423,8 +423,9 @@ void main( void )
 	randVec4 = texelFetch(tBlueNoiseTexture, ivec2(mod(gl_FragCoord.xy + floor(uRandomVec2 * 256.0), 256.0)), 0);
 	
 	//vec2 pixelOffset = vec2( tentFilter(rng()), tentFilter(rng()) ) * 0.5;
-	vec2 pixelOffset = vec2(0); // achieves 60 FPS even on a smartphone, compared with 50 FPS for above line 
-	
+	//vec2 pixelOffset = vec2(0); // achieves 60 FPS even on a smartphone, compared with 50 FPS for above line 
+	vec2 pixelOffset = vec2( tentFilter(rand()), tentFilter(rand()) ) * 0.5;
+
 	// we must map pixelPos into the range -1.0 to +1.0
 	vec2 pixelPos = ((gl_FragCoord.xy + pixelOffset) / uResolution) * 2.0 - 1.0;
 	
