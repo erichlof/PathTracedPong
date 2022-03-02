@@ -35,9 +35,14 @@ let computerWins = false;
 let missTimer = 0;
 let cutSceneTimer = 0;
 let cutSceneLengthInSeconds = 5;
-let difficulty = -1;
+let difficulty = 'Novice';
 let saved_Z_Position = paddle_Z + 80;
 let cutSceneIsPlaying = false;
+
+let gravity_ToggleController, gravity_ToggleObject;
+let needChangeGravityToggle = false;
+let difficulty_SettingController, difficulty_SettingObject;
+let needChangeDifficultySetting = false;
 
 // WebAudio variables
 let audioLoader;
@@ -67,9 +72,11 @@ infoBannerElement.style.cursor = "default";
 infoBannerElement.style.userSelect = "none";
 infoBannerElement.style.MozUserSelect = "none";
 
-// called automatically from within initTHREEjs() function
+// called automatically from within initTHREEjs() function (located in InitCommon.js file)
 function initSceneData()
 {
+	demoFragmentShaderFileName = 'Path_Traced_Pong_Fragment.glsl';
+
 	// scene/demo-specific three.js objects setup goes here
 	sceneIsDynamic = true;
 	cameraFlightSpeed = 100;
@@ -80,6 +87,9 @@ function initSceneData()
 	EPS_intersect = 0.001;
 
 	useGenericInput = false;
+
+	// set camera's field of view
+	worldCamera.fov = 50; // 50
 
 	audioLoader = new THREE.AudioLoader();
 	listener = new THREE.AudioListener();
@@ -134,20 +144,31 @@ function initSceneData()
 	});
 
 
+	gravity_ToggleObject = {
+		Gravity: false
+	};
 
-	// set camera's field of view
-	worldCamera.fov = 50; // 50
+	difficulty_SettingObject = {
+		Difficulty: 'Novice'
+	};
 
-	toggleDifficulty();
-	gravityOn = true; // momentarily set to true...
-	toggleGravity(); // then this function toggles it back to false
-} // end function initSceneData()
+	function handleGravityToggleChange()
+	{
+		needChangeGravityToggle = true;
+	}
 
+	function handleDifficultySettingChange()
+	{
+		needChangeDifficultySetting = true;
+	}
 
+	gravity_ToggleController = gui.add(gravity_ToggleObject, 'Gravity', false).onChange(handleGravityToggleChange);
+	difficulty_SettingController = gui.add(difficulty_SettingObject, 'Difficulty', ['Novice', 'Advanced', 'PONG LORD']).onChange(handleDifficultySettingChange);
 
-// called automatically from within initTHREEjs() function
-function initPathTracingShaders()
-{
+	// jumpstart the game settings and GUI menu 
+	handleGravityToggleChange();
+	handleDifficultySettingChange();
+
 	// scene/demo-specific uniforms go here
 	pathTracingUniforms.uHalfRoomDimensions = { type: "v3", value: halfRoomDimensions };
 	pathTracingUniforms.uBallPos = { type: "v3", value: ballPos };
@@ -156,107 +177,10 @@ function initPathTracingShaders()
 	pathTracingUniforms.uPaddleRadX = { type: "f", value: paddleRadX };
 	pathTracingUniforms.uPaddleRadY = { type: "f", value: paddleRadY };
 	pathTracingUniforms.uCutSceneIsPlaying = { type: "b", value: cutSceneIsPlaying };
-	
 
-	pathTracingDefines = {
-		//NUMBER_OF_TRIANGLES: total_number_of_triangles
-	};
-
-	// load vertex and fragment shader files that are used in the pathTracing material, mesh and scene
-	fileLoader.load('shaders/common_PathTracing_Vertex.glsl', function (shaderText)
-	{
-		pathTracingVertexShader = shaderText;
-
-		createPathTracingMaterial();
-	});
-} // end function initPathTracingShaders()
+} // end function initSceneData()
 
 
-// called automatically from within initPathTracingShaders() function above
-function createPathTracingMaterial()
-{
-	fileLoader.load('shaders/Path_Traced_Pong_Fragment.glsl', function (shaderText)
-	{
-
-		pathTracingFragmentShader = shaderText;
-
-		pathTracingMaterial = new THREE.ShaderMaterial({
-			uniforms: pathTracingUniforms,
-			defines: pathTracingDefines,
-			vertexShader: pathTracingVertexShader,
-			fragmentShader: pathTracingFragmentShader,
-			depthTest: false,
-			depthWrite: false
-		});
-
-		pathTracingMesh = new THREE.Mesh(pathTracingGeometry, pathTracingMaterial);
-		pathTracingScene.add(pathTracingMesh);
-
-		// the following keeps the large scene ShaderMaterial quad right in front 
-		//   of the camera at all times. This is necessary because without it, the scene 
-		//   quad will fall out of view and get clipped when the camera rotates past 180 degrees.
-		worldCamera.add(pathTracingMesh);
-	});
-} // end function createPathTracingMaterial()
-
-
-function toggleDifficulty()
-{
-	difficulty += 1;
-	if (difficulty > 2)
-		difficulty = 0;
-
-	if (difficulty == 0)
-	{
-		maxComputerSpeed = gravityOn ? 4 : 3.5;
-		initialBallSpeed = 110;
-		ballSpeed = initialBallSpeed;
-		document.getElementById("difficultyButton").innerHTML = "Difficulty: NOVICE";
-	}
-	else if (difficulty == 1)
-	{
-		maxComputerSpeed = gravityOn ? 6 : 5.5;
-		initialBallSpeed = 150;
-		ballSpeed = initialBallSpeed;
-		document.getElementById("difficultyButton").innerHTML = "Difficulty: ADVANCED";
-	}
-	else
-	{
-		maxComputerSpeed = gravityOn ? 7.5 : 7;
-		initialBallSpeed = 200;
-		ballSpeed = initialBallSpeed;
-		document.getElementById("difficultyButton").innerHTML = "Difficulty: PONG LORD";
-	}
-
-} // end function toggleGravity()
-
-
-function toggleGravity()
-{
-	gravityOn = !gravityOn;
-
-	if (gravityOn)
-	{
-		document.getElementById("gravityButton").innerHTML = "Gravity: ON";
-		if (difficulty == 0)
-			maxComputerSpeed = 4;       
-		else if (difficulty == 1)
-			maxComputerSpeed = 6;      
-		else
-			maxComputerSpeed = 7.5; 
-	}
-	else
-	{
-		document.getElementById("gravityButton").innerHTML = "Gravity: OFF";
-		if (difficulty == 0)
-			maxComputerSpeed = 3.5;
-		else if (difficulty == 1)
-			maxComputerSpeed = 5.5;
-		else
-			maxComputerSpeed = 7;
-	}
-	
-} // end function toggleGravity()
 
 
 function startNewGame() 
@@ -600,9 +524,61 @@ function updateInputAndCamera()
 } // end function updateInputAndCamera()
 
 
-// called automatically from within the animate() function
+// called automatically from within the animate() function (located in InitCommon.js file)
 function updateVariablesAndUniforms()
 {
+	if (needChangeGravityToggle)
+	{
+		gravityOn = gravity_ToggleController.getValue();
+
+		if (gravityOn)
+		{
+			if (difficulty == 'Novice')
+				maxComputerSpeed = 4;
+			else if (difficulty == 'Advanced')
+				maxComputerSpeed = 6;
+			else if (difficulty == 'PONG LORD')
+				maxComputerSpeed = 7.5;
+		}
+		else if (!gravityOn)
+		{
+			if (difficulty == 'Novice')
+				maxComputerSpeed = 3.5;
+			else if (difficulty == 'Advanced')
+				maxComputerSpeed = 5.5;
+			else if (difficulty == 'PONG LORD')
+				maxComputerSpeed = 7;
+		}
+
+		needChangeGravityToggle = false;
+	}
+
+	if (needChangeDifficultySetting)
+	{
+		difficulty = difficulty_SettingController.getValue();
+
+		if (difficulty == 'Novice')
+		{
+			maxComputerSpeed = gravityOn ? 4 : 3.5;
+			initialBallSpeed = 110;
+			ballSpeed = initialBallSpeed;
+		}
+		else if (difficulty == 'Advanced')
+		{
+			maxComputerSpeed = gravityOn ? 6 : 5.5;
+			initialBallSpeed = 150;
+			ballSpeed = initialBallSpeed;
+		}
+		else if (difficulty == 'PONG LORD')
+		{
+			maxComputerSpeed = gravityOn ? 7.5 : 7;
+			initialBallSpeed = 200;
+			ballSpeed = initialBallSpeed;
+		}
+
+		needChangeDifficultySetting = false;
+	}
+
 	// INPUT and CAMERA
 	if (cutSceneTimer == 0) // only if not during a 'winner' cutscene
 		updateInputAndCamera();
