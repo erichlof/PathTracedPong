@@ -70,7 +70,7 @@ float SceneIntersect( )
 	if (d < t)
 	{
 		t = d;
-		hitNormal = normalize((rayOrigin + rayDirection * t) - spheres[0].position);
+		hitNormal = (rayOrigin + rayDirection * t) - spheres[0].position;
 		hitEmission = spheres[0].emission;
 		hitColor = spheres[0].color;
 		hitType = spheres[0].type;
@@ -82,7 +82,7 @@ float SceneIntersect( )
 	if (d < t)
 	{
 		t = d;
-		hitNormal = normalize(quads[0].normal);
+		hitNormal = quads[0].normal;
 		hitEmission = quads[0].emission;
 		hitColor = quads[0].color;
 		hitType = quads[0].type;
@@ -96,7 +96,7 @@ float SceneIntersect( )
 		if (d < t)
 		{
 			t = d;
-			hitNormal = normalize(planes[i].pla.xyz);
+			hitNormal = planes[i].pla.xyz;
 			hitEmission = planes[i].emission;
 			hitColor = planes[i].color;
 			hitType = planes[i].type;
@@ -112,7 +112,7 @@ float SceneIntersect( )
 		if (d < t)
 		{
 			t = d;
-			hitNormal = normalize(n);
+			hitNormal = n;
 			hitEmission = boxes[i].emission;
 			hitColor = boxes[i].color;
 			hitType = boxes[i].type;
@@ -165,7 +165,7 @@ vec3 CalculateRadiance( out vec3 objectNormal, out vec3 objectColor, out float o
 
 		// useful data 
 		n = normalize(hitNormal);
-                nl = dot(n, rayDirection) < 0.0 ? normalize(n) : normalize(-n);
+                nl = dot(n, rayDirection) < 0.0 ? n : -n;
 		x = rayOrigin + rayDirection * t;
 
 		if (bounces == 0)
