@@ -78,6 +78,8 @@ function initSceneData()
 	demoFragmentShaderFileName = 'Path_Traced_Pong_Fragment.glsl';
 
 	// scene/demo-specific three.js objects setup goes here
+	allowOrthographicCamera = false;
+	
 	sceneIsDynamic = true;
 
 	pixelEdgeSharpness = 0.5;
