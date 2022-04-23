@@ -461,6 +461,11 @@ function updateGameState()
 
 function updateInputAndCamera()
 {
+	// disable horizontal pinch FOV changing on mobile
+	increaseFOV = decreaseFOV = false;
+	// disable vertical pinch aperture size changing on mobile
+	increaseAperture = decreaseAperture = false;
+
 	// slightly add to the player movement speed on mobile
 	if (!mouseControl)
 	{
@@ -502,7 +507,7 @@ function updateInputAndCamera()
 
 	worldCamera.lookAt(playerPos);
 
-	if (increaseFOV)
+	if (dollyCameraOut)
 	{
 		cameraControlsObject.position.z += 2;
 		if (cameraControlsObject.position.z > paddle_Z + 120)
@@ -512,9 +517,9 @@ function updateInputAndCamera()
 		saved_Z_Position = cameraControlsObject.position.z;
 
 		cameraIsMoving = true;
-		increaseFOV = false;
+		dollyCameraOut = false;
 	}
-	if (decreaseFOV)
+	if (dollyCameraIn)
 	{
 		cameraControlsObject.position.z -= 2;
 		if (cameraControlsObject.position.z < paddle_Z + 50)
@@ -524,7 +529,7 @@ function updateInputAndCamera()
 		saved_Z_Position = cameraControlsObject.position.z;
 
 		cameraIsMoving = true;
-		decreaseFOV = false;
+		dollyCameraIn = false;
 	}
 } // end function updateInputAndCamera()
 
