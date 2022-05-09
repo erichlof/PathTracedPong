@@ -175,13 +175,13 @@ function initSceneData()
 	handleDifficultySettingChange();
 
 	// scene/demo-specific uniforms go here
-	pathTracingUniforms.uHalfRoomDimensions = { type: "v3", value: halfRoomDimensions };
-	pathTracingUniforms.uBallPos = { type: "v3", value: ballPos };
-	pathTracingUniforms.uPlayerPos = { type: "v3", value: playerPos };
-	pathTracingUniforms.uComputerPos = { type: "v3", value: computerPos };
-	pathTracingUniforms.uPaddleRadX = { type: "f", value: paddleRadX };
-	pathTracingUniforms.uPaddleRadY = { type: "f", value: paddleRadY };
-	pathTracingUniforms.uCutSceneIsPlaying = { type: "b", value: cutSceneIsPlaying };
+	pathTracingUniforms.uHalfRoomDimensions = { value: halfRoomDimensions };
+	pathTracingUniforms.uBallPos = { value: ballPos };
+	pathTracingUniforms.uPlayerPos = { value: playerPos };
+	pathTracingUniforms.uComputerPos = { value: computerPos };
+	pathTracingUniforms.uPaddleRadX = { value: paddleRadX };
+	pathTracingUniforms.uPaddleRadY = { value: paddleRadY };
+	pathTracingUniforms.uCutSceneIsPlaying = { value: cutSceneIsPlaying };
 
 } // end function initSceneData()
 
