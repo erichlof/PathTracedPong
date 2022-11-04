@@ -12,8 +12,7 @@ uniform float uPaddleRadY;
 uniform bool uCutSceneIsPlaying;
 
 #define N_SPHERES 1
-#define N_PLANES 5
-#define N_BOXES 6
+#define N_BOXES 7
 #define N_QUADS 1
 
 
@@ -27,12 +26,10 @@ float hitObjectID;
 int hitType = -100;
 
 struct Sphere { float radius; vec3 position; vec3 emission; vec3 color; int type; };
-struct Plane { vec4 pla; vec3 emission; vec3 color; int type; };
 struct Quad { vec3 normal; vec3 v0; vec3 v1; vec3 v2; vec3 v3; vec3 emission; vec3 color; int type; };
 struct Box { vec3 minCorner; vec3 maxCorner; vec3 emission; vec3 color; int type; };
 
 Sphere spheres[N_SPHERES];
-Plane planes[N_PLANES];
 Box boxes[N_BOXES];
 Quad quads[N_QUADS];
 
@@ -43,9 +40,9 @@ Quad quads[N_QUADS];
 
 #include <pathtracing_sphere_intersect>
 
-#include <pathtracing_single_sided_plane_intersect>
-
 #include <pathtracing_box_intersect>
+
+#include <pathtracing_box_interior_intersect>
 
 #include <pathtracing_quad_intersect>
 
@@ -90,23 +87,45 @@ float SceneIntersect( )
 	}
 	objectCount++;
 
-	for (int i = 0; i < N_PLANES; i++)
-        {
-		d = SingleSidedPlaneIntersect( planes[i].pla, rayOrigin, rayDirection );
-		if (d < t)
+	d = BoxInteriorIntersect( boxes[6].minCorner, boxes[6].maxCorner, rayOrigin, rayDirection, n );
+	if (d < t && n != vec3(0,0,-1))
+	{
+		t = d;
+		hitNormal = n;
+		hitEmission = boxes[6].emission;
+	
+		if (n == vec3(0,0,1)) // back mirror wall
 		{
-			t = d;
-			hitNormal = planes[i].pla.xyz;
-			hitEmission = planes[i].emission;
-			hitColor = planes[i].color;
-			hitType = planes[i].type;
-			hitObjectID = float(objectCount);
+			hitColor = vec3(0.1);
+			hitType = SPEC;
 		}
-		objectCount++;
-        }
+		else if (n == vec3(0,-1,0)) // ceiling
+		{
+			hitColor = vec3(0.1);
+			hitType = DIFF;
+		}
+		else if (n == vec3(0,1,0)) // floor
+		{
+			hitColor = vec3(0.9);
+			hitType = COAT;
+		}
+		else if (n == vec3(1,0,0)) // left red wall
+		{
+			hitColor = vec3(1, 0, 0);
+			hitType = COAT;
+		}
+		else //if (n == vec3(-1,0,0)) // right green wall
+		{
+			hitColor = vec3(0, 0.7, 0);
+			hitType = COAT;
+		}
+		
+		hitObjectID = float(objectCount);
+	}
+	objectCount++;
 
 
-	for (int i = 0; i < N_BOXES; i++)
+	for (int i = 0; i < 6; i++)
         {
 		d = BoxIntersect( boxes[i].minCorner, boxes[i].maxCorner, rayOrigin, rayDirection, n, isRayExiting );
 		if (d < t)
@@ -377,20 +396,14 @@ void SetupScene(void)
 	float lZ = 10.0;
 
 	spheres[0] = Sphere( 5.0, uBallPos, vec3(10), z, LIGHT);// Game Ball
-
-	planes[0] = Plane( vec4( 0,0,1, -uHalfRoomDimensions.z), z, vec3(0.1), SPEC);// Back Wall mirror
-	planes[1] = Plane( vec4( 0,-1,0, -uHalfRoomDimensions.y), z, vec3(0.1), DIFF);// Ceiling (0.1)
-	planes[2] = Plane( vec4( 0,1,0, -uHalfRoomDimensions.y), z, vec3(0.9), COAT);// Floor (0.9)
-	planes[3] = Plane( vec4( 1,0,0, -uHalfRoomDimensions.x), z, vec3(1.0, 0.0 ,0.0), COAT);// Red Left Wall (1.0, 0.0 ,0.0)
-	planes[4] = Plane( vec4(-1,0,0, -uHalfRoomDimensions.x), z, vec3(0.0, 0.7, 0.0), COAT);// Green Right Wall (0.0, 0.7, 0.0)
-	//planes[5] = Plane( vec4( 0,0,-1, -uHalfRoomDimensions.z), z, vec3(0.1), SPEC);// Front Wall (behind camera)
-
+	
 	boxes[0] = Box( vec3(-uHalfRoomDimensions.x + 1.0, uBallPos.y - 5.0, uBallPos.z - 10.0), vec3(-uHalfRoomDimensions.x + 2.0, uBallPos.y + 5.0, uBallPos.z + 10.0), z, vec3(1.0, 0.765557, 0.336057), SPEC);// Gold Metal Box left
 	boxes[1] = Box( vec3( uHalfRoomDimensions.x - 2.0, uBallPos.y - 5.0, uBallPos.z - 10.0), vec3( uHalfRoomDimensions.x - 1.0, uBallPos.y + 5.0, uBallPos.z + 10.0), z, vec3(1.0), SPEC);// Aluminum Metal Box right
 	boxes[2] = Box( vec3(uBallPos.x - 5.0, uHalfRoomDimensions.y - 2.0, uBallPos.z - 10.0), vec3(uBallPos.x + 5.0, uHalfRoomDimensions.y - 1.0, uBallPos.z + 10.0), z, vec3(0.955008, 0.637427, 0.538163), SPEC);// Copper Metal Box ceiling
 	boxes[3] = Box( vec3(uBallPos.x - 5.0, -uHalfRoomDimensions.y + 1.0, uBallPos.z - 10.0), vec3(uBallPos.x + 5.0, -uHalfRoomDimensions.y + 2.0, uBallPos.z + 10.0), z, vec3(0.955008, 0.637427, 0.538163), SPEC);// Copper Metal Box floor
 	boxes[4] = Box( vec3(uPlayerPos.x-uPaddleRadX, uPlayerPos.y-uPaddleRadY, uPlayerPos.z), vec3(uPlayerPos.x+uPaddleRadX, uPlayerPos.y+uPaddleRadY, uPlayerPos.z+3.0), z, vec3(0.1, 0.7, 1.0), uCutSceneIsPlaying ? COAT : REFR);// Player paddle (0.1,0.7,1.0)
 	boxes[5] = Box( vec3(uComputerPos.x-uPaddleRadX, uComputerPos.y-uPaddleRadY, uComputerPos.z), vec3(uComputerPos.x+uPaddleRadX, uComputerPos.y+uPaddleRadY, uComputerPos.z+3.0), z, vec3(0.7, 0.1, 1.0), COAT);// Computer A.I. paddle (0.7, 0.1, 1.0)
+	boxes[6] = Box( -uHalfRoomDimensions, uHalfRoomDimensions, z, vec3(1), COAT);
 
 	quads[0] = Quad( vec3(0,-1, 0), vec3(-lX,lY,-lZ), vec3(lX,lY,-lZ), vec3(lX,lY,lZ), vec3(-lX,lY,lZ), L1, z, LIGHT);// rectangular Area Light in ceiling
 }
