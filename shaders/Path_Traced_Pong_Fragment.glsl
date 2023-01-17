@@ -60,7 +60,7 @@ float SceneIntersect( )
 	float d = INFINITY;
 	float t = INFINITY;
 	int objectCount = 0;
-	bool isRayExiting = false;
+	int isRayExiting = FALSE;
 	
 	
 	d = SphereIntersect( spheres[0].radius, spheres[0].position, rayOrigin, rayDirection );
@@ -75,7 +75,7 @@ float SceneIntersect( )
 	}
 	objectCount++;
 
-	d = QuadIntersect( quads[0].v0, quads[0].v1, quads[0].v2, quads[0].v3, rayOrigin, rayDirection, false);
+	d = QuadIntersect( quads[0].v0, quads[0].v1, quads[0].v2, quads[0].v3, rayOrigin, rayDirection, FALSE);
 	if (d < t)
 	{
 		t = d;
@@ -151,23 +151,27 @@ vec3 CalculateRadiance( out vec3 objectNormal, out vec3 objectColor, out float o
 {
 	vec3 accumCol = vec3(0);
         vec3 mask = vec3(1);
+	vec3 reflectionMask = vec3(1);
+	vec3 reflectionRayOrigin = vec3(0);
+	vec3 reflectionRayDirection = vec3(0);
 	vec3 dirToLight;
 	vec3 tdir;
 	vec3 x, n, nl;
         
 	float t;
 	float nc, nt, ratioIoR, Re, Tr;
-	float P, RP, TP;
+	//float P, RP, TP;
 	float weight;
 
 	int diffuseCount = 0;
 	int previousIntersecType = -100;
 	hitType = -100;
 
-	bool coatTypeIntersected = false;
-	bool bounceIsSpecular = true;
-	bool sampleLight = false;
-	bool lastHitWasSpec = false;
+	int coatTypeIntersected = FALSE;
+	int bounceIsSpecular = TRUE;
+	int sampleLight = FALSE;
+	int lastHitWasSpec = FALSE;
+	int willNeedReflectionRay = FALSE;
 
 	dynamicSurface = 0.0;
 
@@ -180,7 +184,22 @@ vec3 CalculateRadiance( out vec3 objectNormal, out vec3 objectColor, out float o
 		
 		
 		if (t == INFINITY)
+		{
+			if (willNeedReflectionRay == TRUE)
+			{
+				mask = reflectionMask;
+				rayOrigin = reflectionRayOrigin;
+				rayDirection = reflectionRayDirection;
+
+				willNeedReflectionRay = FALSE;
+				bounceIsSpecular = TRUE;
+				sampleLight = FALSE;
+				diffuseCount = 0;
+				continue;
+			}
+
 			break;
+		}
 
 		// useful data 
 		n = normalize(hitNormal);
@@ -199,33 +218,54 @@ vec3 CalculateRadiance( out vec3 objectNormal, out vec3 objectColor, out float o
 		{	
 			if (diffuseCount == 0)
 			{
-				pixelSharpness = 1.01;
-
 				if (hitEmission == vec3(10))
 				{
 					dynamicSurface = 1.0;
 				}	
 			}
 
-			if (sampleLight)
-				accumCol = mask * hitEmission;
-			else if (bounceIsSpecular)
+			if (bounces == 0)
+				pixelSharpness = 1.01;
+
+			if (diffuseCount == 0)
 			{
-				accumCol = mask * clamp(hitEmission, 0.0, 1.0);
+				objectNormal = nl;
+				objectColor = hitColor;
+				objectID = hitObjectID;
+			}
+
+			if (sampleLight == TRUE)
+				accumCol += mask * hitEmission;
+			else if (bounceIsSpecular == TRUE)
+			{
+				accumCol += mask * clamp(hitEmission, 0.0, 1.0);
 			}
 				
+			if (willNeedReflectionRay == TRUE)
+			{
+				mask = reflectionMask;
+				rayOrigin = reflectionRayOrigin;
+				rayDirection = reflectionRayDirection;
+
+				willNeedReflectionRay = FALSE;
+				bounceIsSpecular = TRUE;
+				sampleLight = FALSE;
+				diffuseCount = 0;
+				continue;
+			}
 			// reached a light, so we can exit
 			break;
 		}
 
 
-		//if we get here and sampleLight is still true, shadow ray failed to find a light source
-		// if (sampleLight) 
+		// if we get here and sampleLight is still TRUE, shadow ray failed to find the light source 
+		// the ray hit an occluding object along its way to the light
+		// if (sampleLight == TRUE) 
 		// 	break;
 		
 
 		// make player's background mirror reflection a solid plastic surface 
-		if (lastHitWasSpec && hitType == REFR)
+		if (lastHitWasSpec == TRUE && hitType == REFR)
 			hitType = COAT;
 
 		 
@@ -235,7 +275,7 @@ vec3 CalculateRadiance( out vec3 objectNormal, out vec3 objectColor, out float o
 
 			mask *= hitColor;
 
-			bounceIsSpecular = false;
+			bounceIsSpecular = FALSE;
 
 			if (diffuseCount == 1 && rand() < 0.5)
 			{
@@ -263,7 +303,7 @@ vec3 CalculateRadiance( out vec3 objectNormal, out vec3 objectColor, out float o
 			rayDirection = dirToLight;
 			rayOrigin = x + nl * uEPS_intersect;
 
-			sampleLight = true;
+			sampleLight = TRUE;
 			continue;
                         
 		} // end if (hitType == DIFF)
@@ -271,7 +311,7 @@ vec3 CalculateRadiance( out vec3 objectNormal, out vec3 objectColor, out float o
 		
 		if (hitType == SPEC)  // Ideal SPECULAR reflection
 		{
-			lastHitWasSpec = true;
+			lastHitWasSpec = TRUE;
 
 			mask *= hitColor;
 
@@ -285,27 +325,36 @@ vec3 CalculateRadiance( out vec3 objectNormal, out vec3 objectColor, out float o
 
 		if (hitType == REFR)  // Ideal dielectric REFRACTION
 		{
-			pixelSharpness = diffuseCount == 0 ? -1.0 : pixelSharpness;
+			pixelSharpness = diffuseCount == 0 && coatTypeIntersected == FALSE ? -1.0 : pixelSharpness;
 
 			nc = 1.0; // IOR of Air
 			nt = 1.5; // IOR of common Glass
 			Re = calcFresnelReflectance(rayDirection, n, nc, nt, ratioIoR);
 			Tr = 1.0 - Re;
-			P  = 0.25 + (0.5 * Re);
-                	RP = Re / P;
-                	TP = Tr / (1.0 - P);
-			
-			if (bounces == 0 && rand() < P)
+
+			if (bounces == 0 || (bounces == 1 && hitObjectID != objectID && bounceIsSpecular == TRUE))
 			{
-				mask *= RP;
-				rayDirection = reflect(rayDirection, nl); // reflect ray from surface
-				rayOrigin = x + nl * uEPS_intersect;
+				reflectionMask = mask * Re;
+				reflectionRayDirection = reflect(rayDirection, nl); // reflect ray from surface
+				reflectionRayOrigin = x + nl * uEPS_intersect;
+				willNeedReflectionRay = TRUE;
+			}
+
+			if (Re == 1.0)
+			{
+				mask = reflectionMask;
+				rayOrigin = reflectionRayOrigin;
+				rayDirection = reflectionRayDirection;
+
+				willNeedReflectionRay = FALSE;
+				bounceIsSpecular = TRUE;
+				sampleLight = FALSE;
 				continue;
 			}
 
 			// transmit ray through surface
 			mask *= hitColor;
-			mask *= TP;
+			mask *= Tr;
 			
 			//tdir = refract(rayDirection, nl, ratioIoR);
 			tdir = rayDirection;
@@ -313,7 +362,7 @@ vec3 CalculateRadiance( out vec3 objectNormal, out vec3 objectColor, out float o
 			rayOrigin = x - nl * uEPS_intersect;
 
 			// if (diffuseCount == 1)
-			// 	bounceIsSpecular = true; // turn on refracting caustics
+			// 	bounceIsSpecular = TRUE; // turn on refracting caustics
 
 			continue;
 			
@@ -322,35 +371,33 @@ vec3 CalculateRadiance( out vec3 objectNormal, out vec3 objectColor, out float o
 		
 		if (hitType == COAT)  // Diffuse object underneath with ClearCoat on top
 		{
-			coatTypeIntersected = true;
+			coatTypeIntersected = TRUE;
 
 			nc = 1.0; // IOR of Air
 			nt = 1.4; // IOR of Clear Coat
 			Re = calcFresnelReflectance(rayDirection, nl, nc, nt, ratioIoR);
 			Tr = 1.0 - Re;
-			P  = 0.25 + (0.5 * Re);
-                	RP = Re / P;
-                	TP = Tr / (1.0 - P);
 
 			if (hitColor == vec3(0.7, 0.1, 1.0) && (bounces == 0 || previousIntersecType == REFR))
 			{
 				dynamicSurface = 1.0;
 			}
-
-			if (diffuseCount == 0 && rand() < P)
+			
+			if (bounces == 0 || (bounces == 1 && hitObjectID != objectID && bounceIsSpecular == TRUE))
 			{
-				mask *= RP;
-				rayDirection = reflect(rayDirection, nl); // reflect ray from surface
-				rayOrigin = x + nl * uEPS_intersect;
-				continue;
+				reflectionMask = mask * Re;
+				reflectionRayDirection = reflect(rayDirection, nl); // reflect ray from surface
+				reflectionRayOrigin = x + nl * uEPS_intersect;
+				willNeedReflectionRay = TRUE;
 			}
 
 			diffuseCount++;
 
-			mask *= TP;
+			if (bounces == 0)
+				mask *= Tr;
 			mask *= hitColor;
 			
-			bounceIsSpecular = false;
+			bounceIsSpecular = FALSE;
 			
 			// if (diffuseCount == 1 && rand() < 0.5)
 			// {
@@ -370,7 +417,7 @@ vec3 CalculateRadiance( out vec3 objectNormal, out vec3 objectColor, out float o
 			rayDirection = dirToLight;
 			rayOrigin = x + nl * uEPS_intersect;
 
-			sampleLight = true;
+			sampleLight = TRUE;
 			continue;
 			
 		} //end if (hitType == COAT)
