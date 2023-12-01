@@ -93,6 +93,9 @@ function initSceneData()
 
 	useGenericInput = false;
 
+	// the usual directional buttons for mobile are not needed on this game
+	mobileShowButtons = false;
+
 	// set camera's field of view
 	worldCamera.fov = 50; // 50
 
