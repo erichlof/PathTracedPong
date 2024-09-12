@@ -22,7 +22,7 @@ vec3 rayOrigin, rayDirection;
 // recorded intersection data:
 vec3 hitNormal, hitEmission, hitColor;
 vec2 hitUV;
-float hitObjectID;
+float hitObjectID = -INFINITY;
 int hitType = -100;
 
 struct Sphere { float radius; vec3 position; vec3 emission; vec3 color; int type; };
@@ -217,30 +217,35 @@ vec3 CalculateRadiance( out vec3 objectNormal, out vec3 objectColor, out float o
 	vec3 reflectionRayOrigin = vec3(0);
 	vec3 reflectionRayDirection = vec3(0);
 	vec3 dirToLight;
-	vec3 tdir;
 	vec3 x, n, nl;
         
 	float t;
 	float nc, nt, ratioIoR, Re, Tr;
-	//float P, RP, TP;
 	float weight;
+	float previousObjectID;
 
+	int reflectionBounces = -1;
 	int diffuseCount = 0;
 	int previousIntersecType = -100;
 	hitType = -100;
 
-	int coatTypeIntersected = FALSE;
 	int bounceIsSpecular = TRUE;
 	int sampleLight = FALSE;
 	int lastHitWasSpec = FALSE;
 	int willNeedReflectionRay = FALSE;
+	int isReflectionTime = FALSE;
+	int reflectionNeedsToBeSharp = FALSE;
 
 	dynamicSurface = 0.0;
 
 	
-	for (int bounces = 0; bounces < 6; bounces++)
+	for (int bounces = 0; bounces < 8; bounces++)
 	{
+		// if (isReflectionTime == TRUE)
+		// 	reflectionBounces++;
+
 		previousIntersecType = hitType;
+		previousObjectID = hitObjectID;
 
 		t = SceneIntersect();
 		
@@ -256,7 +261,7 @@ vec3 CalculateRadiance( out vec3 objectNormal, out vec3 objectColor, out float o
 				willNeedReflectionRay = FALSE;
 				bounceIsSpecular = TRUE;
 				sampleLight = FALSE;
-				diffuseCount = 0;
+				isReflectionTime = TRUE;
 				continue;
 			}
 
@@ -268,31 +273,30 @@ vec3 CalculateRadiance( out vec3 objectNormal, out vec3 objectColor, out float o
                 nl = dot(n, rayDirection) < 0.0 ? n : -n;
 		x = rayOrigin + rayDirection * t;
 
+		
 		if (bounces == 0)
+		{
+			objectID = hitObjectID;
+		}
+		if (isReflectionTime == FALSE && diffuseCount == 0 && hitObjectID != previousObjectID)
 		{
 			objectNormal = nl;
 			objectColor = hitColor;
-			objectID = hitObjectID;
 		}
 		
 		
 		if (hitType == LIGHT)
 		{	
-			if (diffuseCount == 0)
-			{
-				if (hitEmission == vec3(10))
-				{
-					dynamicSurface = 1.0;
-				}	
-			}
+			if (diffuseCount == 0 && hitEmission == vec3(10))
+				dynamicSurface = 1.0;		
+			
+			if (diffuseCount == 0 && isReflectionTime == FALSE)
+				pixelSharpness = 1.01; // maximum sharpness for dynamic scenes
 
-			if (bounces == 0)
-				pixelSharpness = 1.01;
-
-			if (diffuseCount == 0)
+			if (isReflectionTime == TRUE && bounceIsSpecular == TRUE)
 			{
 				objectNormal = nl;
-				objectColor = hitColor;
+				//objectColor = hitColor;
 				objectID = hitObjectID;
 			}
 
@@ -312,7 +316,7 @@ vec3 CalculateRadiance( out vec3 objectNormal, out vec3 objectColor, out float o
 				willNeedReflectionRay = FALSE;
 				bounceIsSpecular = TRUE;
 				sampleLight = FALSE;
-				diffuseCount = 0;
+				isReflectionTime = TRUE;
 				continue;
 			}
 			// reached a light, so we can exit
@@ -387,12 +391,17 @@ vec3 CalculateRadiance( out vec3 objectNormal, out vec3 objectColor, out float o
 
 		if (hitType == REFR)  // Ideal dielectric REFRACTION
 		{
-			pixelSharpness = diffuseCount == 0 && coatTypeIntersected == FALSE ? -1.0 : pixelSharpness;
-
 			nc = 1.0; // IOR of Air
 			nt = 1.5; // IOR of common Glass
 			Re = calcFresnelReflectance(rayDirection, n, nc, nt, ratioIoR);
 			Tr = 1.0 - Re;
+
+			if (Re == 1.0)
+			{
+				rayDirection = reflect(rayDirection, nl);
+				rayOrigin = x + nl * uEPS_intersect;
+				continue;
+			}
 
 			if (bounces == 0 || (bounces == 1 && hitObjectID != objectID && bounceIsSpecular == TRUE))
 			{
@@ -402,25 +411,12 @@ vec3 CalculateRadiance( out vec3 objectNormal, out vec3 objectColor, out float o
 				willNeedReflectionRay = TRUE;
 			}
 
-			if (Re == 1.0)
-			{
-				mask = reflectionMask;
-				rayOrigin = reflectionRayOrigin;
-				rayDirection = reflectionRayDirection;
-
-				willNeedReflectionRay = FALSE;
-				bounceIsSpecular = TRUE;
-				sampleLight = FALSE;
-				continue;
-			}
-
 			// transmit ray through surface
 			mask *= hitColor;
 			mask *= Tr;
 			
-			//tdir = refract(rayDirection, nl, ratioIoR);
-			tdir = rayDirection;
-			rayDirection = tdir;
+			//rayDirection = refract(rayDirection, nl, ratioIoR);
+			rayDirection = rayDirection;
 			rayOrigin = x - nl * uEPS_intersect;
 
 			// if (diffuseCount == 1)
@@ -433,8 +429,6 @@ vec3 CalculateRadiance( out vec3 objectNormal, out vec3 objectColor, out float o
 		
 		if (hitType == COAT)  // Diffuse object underneath with ClearCoat on top
 		{
-			coatTypeIntersected = TRUE;
-
 			nc = 1.0; // IOR of Air
 			nt = 1.4; // IOR of Clear Coat
 			Re = calcFresnelReflectance(rayDirection, nl, nc, nt, ratioIoR);
@@ -485,7 +479,7 @@ vec3 CalculateRadiance( out vec3 objectNormal, out vec3 objectColor, out float o
 		} //end if (hitType == COAT)
 		
 
-	} // end for (int bounces = 0; bounces < 6; bounces++)
+	} // end for (int bounces = 0; bounces < 8; bounces++)
 	
 	
 	return max(vec3(0), accumCol);
@@ -540,7 +534,8 @@ void main( void )
 	randNumber = 0.0; // the final randomly-generated number (range: 0.0 to 1.0)
 	blueNoise = texelFetch(tBlueNoiseTexture, ivec2(mod(floor(gl_FragCoord.xy), 128.0)), 0).r;
 
-	vec2 pixelOffset = vec2( tentFilter(rand()), tentFilter(rand()) ) * 0.5;
+	vec2 pixelOffset = vec2( tentFilter(rand()), tentFilter(rand()) );
+	pixelOffset *= uCameraIsMoving ? 0.5 : 1.0;
 
 	// we must map pixelPos into the range -1.0 to +1.0
 	vec2 pixelPos = ((gl_FragCoord.xy + vec2(0.5) + pixelOffset) / uResolution) * 2.0 - 1.0;
@@ -610,27 +605,39 @@ void main( void )
 		currentPixel.rgb *= 0.1; // brightness of new image (noisy)
 	}
 
-	// if current raytraced pixel didn't return any color value, just use the previous frame's pixel color
+	/* // if current raytraced pixel didn't return any color value, just use the previous frame's pixel color
 	if (currentPixel.rgb == vec3(0.0))
 	{
 		currentPixel.rgb = previousPixel.rgb;
 		previousPixel.rgb *= 0.5;
 		currentPixel.rgb *= 0.5;
-	}
-
-	
-	if (colorDifference >= 1.0 || normalDifference >= 1.0 || objectDifference >= 1.0)
-		pixelSharpness = 1.01;
+	} */
 
 	currentPixel.a = pixelSharpness;
 
-	// makes sharp edges more stable
-	if (previousPixel.a == 1.01)
-		currentPixel.a = 1.01;
+	// check for all edges that are not light sources
+	if (colorDifference >= 1.0 || normalDifference >= 1.0 || objectDifference >= 1.0)
+		currentPixel.a = pixelSharpness = 1.0;
 
+	// makes light source edges (shape boundaries) more stable
+	if (previousPixel.a == 1.01)
+	{
+		if (pixelSharpness > 0.0)
+			currentPixel.a = 1.01;
+		else currentPixel.a = 1.0;
+	}
+
+	// makes sharp edges more stable
+	if (!uCameraIsMoving && previousPixel.a == 1.0)
+	{
+		if (pixelSharpness > 0.0)
+			currentPixel.a = 1.01;
+		else currentPixel.a = 1.0;
+	}
+		
 	// for dynamic scenes (to clear out old, dark, sharp pixel trails left behind from moving objects)
-	if (previousPixel.a == 1.01 && rng() < 0.05)
-		currentPixel.a = 1.0;
+	if (previousPixel.a == 1.0 && rng() < 0.05)
+		currentPixel.a = 0.0;
 	
 
 	pc_fragColor = vec4(previousPixel.rgb + currentPixel.rgb, dynamicSurface > 0.0 ? 0.99 : currentPixel.a);
