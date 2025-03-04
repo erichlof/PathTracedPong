@@ -280,8 +280,8 @@ vec3 CalculateRadiance( out vec3 objectNormal, out vec3 objectColor, out float o
 		}
 		if (isReflectionTime == FALSE && diffuseCount == 0 && hitObjectID != previousObjectID)
 		{
-			objectNormal = nl;
-			objectColor = hitColor;
+			objectNormal += nl;
+			objectColor += hitColor;
 		}
 		
 		
@@ -291,13 +291,13 @@ vec3 CalculateRadiance( out vec3 objectNormal, out vec3 objectColor, out float o
 				dynamicSurface = 1.0;		
 			
 			if (diffuseCount == 0 && isReflectionTime == FALSE)
-				pixelSharpness = 1.01; // maximum sharpness for dynamic scenes
+				pixelSharpness = 1.0;
 
 			if (isReflectionTime == TRUE && bounceIsSpecular == TRUE)
 			{
-				objectNormal = nl;
+				objectNormal += nl;
 				//objectColor = hitColor;
-				objectID = hitObjectID;
+				objectID += hitObjectID;
 			}
 
 			if (sampleLight == TRUE)
@@ -535,7 +535,7 @@ void main( void )
 	blueNoise = texelFetch(tBlueNoiseTexture, ivec2(mod(floor(gl_FragCoord.xy), 128.0)), 0).r;
 
 	vec2 pixelOffset = vec2( tentFilter(rand()), tentFilter(rand()) );
-	pixelOffset *= 0.5;//uCameraIsMoving ? 0.5 : 1.0;
+	//pixelOffset *= 0.5;//uCameraIsMoving ? 0.5 : 1.0;
 
 	// we must map pixelPos into the range -1.0 to +1.0
 	vec2 pixelPos = ((gl_FragCoord.xy + vec2(0.5) + pixelOffset) / uResolution) * 2.0 - 1.0;
@@ -608,17 +608,17 @@ void main( void )
 	currentPixel.a = pixelSharpness;
 
 	// check for all edges that are not light sources
-	if (colorDifference >= 1.0 || normalDifference >= 1.0 || objectDifference >= 1.0)
+	if (pixelSharpness < 1.01 && (colorDifference >= 1.0 || normalDifference >= 1.0 || objectDifference >= 1.0)) // all other edges
 		currentPixel.a = pixelSharpness = 1.0;
 
 	// makes light source edges (shape boundaries) more stable
-	if (previousPixel.a == 1.01)
-		currentPixel.a = 1.01;
+	// if (previousPixel.a == 1.01)
+	// 	currentPixel.a = 1.01;
 
 	// makes sharp edges more stable
 	if (previousPixel.a == 1.0)
 		currentPixel.a = 1.0;
-
+		
 	// for dynamic scenes (to clear out old, dark, sharp pixel trails left behind from moving objects)
 	if (previousPixel.a == 1.0 && rng() < 0.05)
 		currentPixel.a = 0.0;
