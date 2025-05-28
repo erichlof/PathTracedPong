@@ -216,7 +216,9 @@ vec3 CalculateRadiance( out vec3 objectNormal, out vec3 objectColor, out float o
 	vec3 reflectionMask = vec3(1);
 	vec3 reflectionRayOrigin = vec3(0);
 	vec3 reflectionRayDirection = vec3(0);
-	vec3 dirToLight;
+	vec3 diffuseBounceMask = vec3(1);
+	vec3 diffuseBounceRayOrigin = vec3(0);
+	vec3 diffuseBounceRayDirection = vec3(0);
 	vec3 x, n, nl;
         
 	float t;
@@ -235,11 +237,13 @@ vec3 CalculateRadiance( out vec3 objectNormal, out vec3 objectColor, out float o
 	int willNeedReflectionRay = FALSE;
 	int isReflectionTime = FALSE;
 	int reflectionNeedsToBeSharp = FALSE;
+	int willNeedDiffuseBounceRay = FALSE;
+	int isDiffuseBounceTime = FALSE;
 
 	dynamicSurface = 0.0;
 
 	
-	for (int bounces = 0; bounces < 8; bounces++)
+	for (int bounces = 0; bounces < 10; bounces++)
 	{
 		// if (isReflectionTime == TRUE)
 		// 	reflectionBounces++;
@@ -252,6 +256,21 @@ vec3 CalculateRadiance( out vec3 objectNormal, out vec3 objectColor, out float o
 		
 		if (t == INFINITY)
 		{
+			if (willNeedDiffuseBounceRay == TRUE)
+			{
+				mask = diffuseBounceMask;
+				rayOrigin = diffuseBounceRayOrigin;
+				rayDirection = diffuseBounceRayDirection;
+
+				willNeedDiffuseBounceRay = FALSE;
+				bounceIsSpecular = FALSE;
+				sampleLight = FALSE;
+				isDiffuseBounceTime = TRUE;
+				isReflectionTime = FALSE;
+				diffuseCount = 1;
+				continue;
+			}
+
 			if (willNeedReflectionRay == TRUE)
 			{
 				mask = reflectionMask;
@@ -262,6 +281,8 @@ vec3 CalculateRadiance( out vec3 objectNormal, out vec3 objectColor, out float o
 				bounceIsSpecular = TRUE;
 				sampleLight = FALSE;
 				isReflectionTime = TRUE;
+				isDiffuseBounceTime = FALSE;
+				diffuseCount = 0;
 				continue;
 			}
 
@@ -307,6 +328,21 @@ vec3 CalculateRadiance( out vec3 objectNormal, out vec3 objectColor, out float o
 				accumCol += mask * clamp(hitEmission, 0.0, 1.0);
 			}
 				
+			if (willNeedDiffuseBounceRay == TRUE)
+			{
+				mask = diffuseBounceMask;
+				rayOrigin = diffuseBounceRayOrigin;
+				rayDirection = diffuseBounceRayDirection;
+
+				willNeedDiffuseBounceRay = FALSE;
+				bounceIsSpecular = FALSE;
+				sampleLight = FALSE;
+				isDiffuseBounceTime = TRUE;
+				isReflectionTime = FALSE;
+				diffuseCount = 1;
+				continue;
+			}
+
 			if (willNeedReflectionRay == TRUE)
 			{
 				mask = reflectionMask;
@@ -317,6 +353,8 @@ vec3 CalculateRadiance( out vec3 objectNormal, out vec3 objectColor, out float o
 				bounceIsSpecular = TRUE;
 				sampleLight = FALSE;
 				isReflectionTime = TRUE;
+				isDiffuseBounceTime = FALSE;
+				diffuseCount = 0;
 				continue;
 			}
 			// reached a light, so we can exit
@@ -324,10 +362,8 @@ vec3 CalculateRadiance( out vec3 objectNormal, out vec3 objectColor, out float o
 		}
 
 
-		// if we get here and sampleLight is still TRUE, shadow ray failed to find the light source 
-		// the ray hit an occluding object along its way to the light
-		// if (sampleLight == TRUE) 
-		// 	break;
+		
+			
 		
 
 		// make player's background mirror reflection a solid plastic surface 
@@ -343,32 +379,29 @@ vec3 CalculateRadiance( out vec3 objectNormal, out vec3 objectColor, out float o
 
 			bounceIsSpecular = FALSE;
 
-			if (diffuseCount == 1 && rand() < 0.5)
-			{
-				mask *= 2.0;
-				// choose random Diffuse sample vector
-				rayDirection = randomCosWeightedDirectionInHemisphere(nl);
-				rayOrigin = x + nl * uEPS_intersect;
-				continue;
-			}
+			rayOrigin = x + nl * uEPS_intersect;
                         
 			if (diffuseCount == 1)
 			{
-				dirToLight = sampleSphereLight(x, nl, spheres[0], weight);
-				mask *= 2.0;
-			}	
-			else
-				dirToLight = sampleQuadLight(x, nl, quads[0], weight);	
-			// if (distance(x, uBallPos) < rng() * 100.0 && rng() < dot(nl, normalize(uBallPos - x)))
-			// 	dirToLight = sampleSphereLight(x, nl, spheres[0], weight);
+				diffuseBounceMask = mask;
+				diffuseBounceRayOrigin = rayOrigin;
+				diffuseBounceRayDirection = randomCosWeightedDirectionInHemisphere(nl);
+				willNeedDiffuseBounceRay = TRUE;
+			}
+                        
+			// if (diffuseCount == 1)
+			// {
+			// 	rayDirection = sampleSphereLight(x, nl, spheres[0], weight);
+			// 	mask *= 2.0;
+			// }	
 			// else
-			// 	dirToLight = sampleQuadLight(x, nl, quads[0], weight);
+			// 	rayDirection = sampleQuadLight(x, nl, quads[0], weight);	
+			if (distance(x, uBallPos) < rng() * 100.0 && rng() < dot(nl, normalize(uBallPos - x)))
+				rayDirection = sampleSphereLight(x, nl, spheres[0], weight);
+			else
+				rayDirection = sampleQuadLight(x, nl, quads[0], weight);
 				
 			mask *= weight;
-
-			rayDirection = dirToLight;
-			rayOrigin = x + nl * uEPS_intersect;
-
 			sampleLight = TRUE;
 			continue;
                         
@@ -448,38 +481,35 @@ vec3 CalculateRadiance( out vec3 objectNormal, out vec3 objectColor, out float o
 			}
 
 			diffuseCount++;
-
-			if (bounces == 0)
-				mask *= Tr;
+			
+			mask *= Tr;
 			mask *= hitColor;
 			
 			bounceIsSpecular = FALSE;
 			
-			// if (diffuseCount == 1 && rand() < 0.5)
+			rayOrigin = x + nl * uEPS_intersect;
+                        
+			// if (diffuseCount == 1)
 			// {
-			// choose random Diffuse sample vector
-			//	rayDirection = randomCosWeightedDirectionInHemisphere(nl);
-			//	rayOrigin = x + nl * uEPS_intersect;
-			// 	continue;
+			// 	diffuseBounceMask = mask;
+			// 	diffuseBounceRayOrigin = rayOrigin;
+			// 	diffuseBounceRayDirection = randomCosWeightedDirectionInHemisphere(nl);
+			// 	willNeedDiffuseBounceRay = TRUE;
 			// }
 
 			if (distance(x, uBallPos) < rng() * 100.0 && rand() < dot(nl, normalize(uBallPos - x)))
-				dirToLight = sampleSphereLight(x, nl, spheres[0], weight);
+				rayDirection = sampleSphereLight(x, nl, spheres[0], weight);
 			else
-				dirToLight = sampleQuadLight(x, nl, quads[0], weight);
+				rayDirection = sampleQuadLight(x, nl, quads[0], weight);
 
 			mask *= weight;
-			
-			rayDirection = dirToLight;
-			rayOrigin = x + nl * uEPS_intersect;
-
 			sampleLight = TRUE;
 			continue;
 			
 		} //end if (hitType == COAT)
 		
 
-	} // end for (int bounces = 0; bounces < 8; bounces++)
+	} // end for (int bounces = 0; bounces < 10; bounces++)
 	
 	
 	return max(vec3(0), accumCol);
